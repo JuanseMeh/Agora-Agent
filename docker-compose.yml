@@ -1,0 +1,53 @@
+services:
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-agent
+    restart: unless-stopped
+    depends_on:
+      agent-db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    networks:
+      - microservices-net
+
+  agent-db:
+    image: postgres:18-alpine
+    container_name: agent-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: agent
+      POSTGRES_PASSWORD: agent
+      POSTGRES_DB: agent
+    ports:
+      - "5434:5432" # Host port 5434 to avoid conflict if 5432/5433 are used
+    volumes:
+      - agent_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agent -d agent"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - microservices-net
+
+  agent-redis:
+    image: redis:7.2-alpine
+    container_name: agent-redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379" # Host port 6380 to avoid conflict
+    networks:
+      - microservices-net
+
+volumes:
+  agent_db_data:
+
+networks:
+  microservices-net:
+    external: true
+    name: microservices-net
