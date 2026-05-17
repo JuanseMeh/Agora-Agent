@@ -263,7 +263,7 @@ docker network create microservices-net
 | gRPC client | `grpcio` + generated protobuf stubs |
 | Session store | Redis 7 |
 | Persistent DB | PostgreSQL 16 |
-| ORM | SQLAlchemy 2 (async) + Alembic migrations |
+| DB client | asyncpg (raw async queries) + Alembic migrations |
 | Validation | Pydantic v2 + pydantic-settings |
 | Serialization | `orjson` |
 | Linting / formatting | Ruff |

@@ -50,11 +50,11 @@ Migrations run. Tables exist. SQLAlchemy models match the schema. Basic read/wri
 - [ ] Confirm the ENUM values for `role` and `grading_summaries.status` are final — changing ENUMs in Postgres after data exists is painful
 
 ### Build order
-1. `db/models.py` — SQLAlchemy 2 async models: `Conversation`, `Message`, `GradingSummary`
-2. `db/session.py` — async engine + `AsyncSession` factory
-3. `db/migrations/` — Alembic setup, `env.py` wired to async engine
-4. First migration — create all three tables + ENUMs
-5. `db/repositories/` — one repository per model (no raw queries in tools or services)
+1. `db/pool.py`          — asyncpg connection pool, init + teardown
+2. `db/migrations/`      — Alembic setup pointed directly at the DB (no models needed)
+3. `First migration`     — raw SQL: CREATE TYPE enums + CREATE TABLE for all three tables
+4. `db/queries/`         — one file per table with raw async query functions
+                         conversations.py, messages.py, grading_summaries.py
 
 ### Done when
 ```bash
