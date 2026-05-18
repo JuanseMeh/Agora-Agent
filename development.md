@@ -162,6 +162,7 @@ LangGraph agent receives a message, selects the correct tool(s), calls them, and
 - [ ] Finalize the system prompt — it must describe the platform domain, available actions, and the block output format. This is the most important prompt in the system. Draft it, test it against at least 10 realistic teacher messages before wiring
 - [ ] Decide LangGraph graph topology — linear (one tool at a time) or parallel (multiple tools per turn). Start linear, document the decision
 - [ ] Decide `max_iterations` cap — default is 10, confirm this is enough for the most complex expected flow (suggest → approve requires at minimum 2 tool calls)
+- [ ] Note: `ApproveSuggestion` is not a traditional tool but a confirmation handler. The LangGraph should treat it as a special node triggered by teacher confirmation, not an LLM-selected tool.
 - [ ] Confirm Gemini 2.0 Flash supports tool calling with the LangChain integration — run a minimal standalone test with one tool before building the full graph
 
 ### Build order
@@ -238,7 +239,7 @@ Assumptions made during planning that must be validated before the relevant phas
 |---|---|---|---|
 | 1 | `workspace-service` internal routes are callable without auth from within the Docker network | 2 | unverified |
 | 2 | `ai-orchestrator` is reachable by container name on the shared network | 2 | unverified |
-| 3 | `SuggestAssignment` is synchronous — it blocks until all submissions are graded | 2 | unverified |
+| 3 | `SuggestAssignment` flow transitions from 'suggested' to 'graded' directly. Orchestrator writes to workspace-service | 2 | unverified |
 | 4 | `submission_stats` exists as an endpoint on `workspace-service` | 4 | unverified |
 | 5 | Gemini 2.0 Flash supports parallel tool calling via LangChain integration | 5 | unverified |
 | 6 | The orchestrator will send the webhook to the agent when grading completes | 7 | unverified |
