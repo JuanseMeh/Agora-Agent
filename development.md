@@ -45,9 +45,9 @@ Postgres and Redis containers are healthy. Agent container starts without errors
 Migrations run. Tables exist. SQLAlchemy models match the schema. Basic read/write works from a test script.
 
 ### Analysis steps
-- [ ] Confirm UUID strategy — does PostgreSQL generate them (`gen_random_uuid()`) or does the app?
-- [ ] Confirm whether `workspace_id` on conversations can always be inferred from session, or if it truly is nullable at the DB level
-- [ ] Confirm the ENUM values for `role` and `grading_summaries.status` are final — changing ENUMs in Postgres after data exists is painful
+- [X] Confirm UUID strategy — does PostgreSQL generate them (`gen_random_uuid()`) or does the app?
+- [X] Confirm whether `workspace_id` on conversations can always be inferred from session, or if it truly is nullable at the DB level
+- [X] Confirm the ENUM values for `role` and `grading_summaries.status` are final — changing ENUMs in Postgres after data exists is painful
 
 ### Build order
 1. `db/pool.py`          — asyncpg connection pool, init + teardown
