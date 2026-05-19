@@ -2,12 +2,20 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from config.settings import settings
 from db.pool import init_pool, close_pool
+from services.http_client import init_http_clients, close_http_clients
+from services.grpc_client import init_grpc_client, close_grpc_client
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_pool()
+    init_http_clients()
+    await init_grpc_client()
     yield
+    await close_grpc_client()
+    await close_http_clients()
     await close_pool()
+
 
 app = FastAPI(
     title="AI Agent Service",
@@ -16,10 +24,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
 @app.get("/health")
 async def health_check():
     from db.pool import get_pool
-    # Simple check to see if pool is accessible
     try:
         pool = get_pool()
         async with pool.acquire() as conn:
@@ -27,8 +35,9 @@ async def health_check():
         db_status = "connected"
     except Exception as e:
         db_status = f"error: {str(e)}"
-    
+
     return {"status": "ok", "service": "ai-agent", "database": db_status}
+
 
 if __name__ == "__main__":
     import uvicorn
