@@ -37,7 +37,7 @@ The **AI Agent** is the conversational intelligence layer of this platform. It e
 |---|---|---|
 | `gateway-service` | Single entry point, request routing | REST |
 | `auth-service` | Token issuance, identity, permissions | REST |
-| `users-service` | User profiles, roles, preferences | REST |
+| `user-service` | User profiles, roles, preferences | REST |
 | `workspace-service` | Workspaces, members, assignments, and submissions | REST |
 | `ai-orchestrator` | Standardizes and executes LLM requests with rubrics, academic context and evaluation criteria. Handles automatic grading and periodic report generation — deterministic, traceable, reproducible | gRPC |
 | `ai-agent` *(this service)* | Conversational AI interface for teachers | REST + SSE |
@@ -84,12 +84,13 @@ Teacher (chat input)
 
 ## Orchestrator gRPC Contract
 
-The orchestrator exposes three RPC methods defining a two-phase grading workflow:
+The orchestrator exposes four RPC methods:
 
 ```
-SuggestAssignment   →  generates AI grading suggestions (not committed)
-ApproveSuggestion   →  commits a suggestion set as final grades
-GradeAssignment     →  direct grading without suggestion phase
+SuggestAssignment        →  generates AI grading suggestions (not committed)
+ApproveSuggestion        →  commits a suggestion set as final grades
+GradeAssignment          →  direct grading without suggestion phase
+GeneratePerformanceReport  →  per-assignment/student metrics + AI analysis
 ```
 
 Both `SuggestAssignment` and `GradeAssignment` accept flexible targeting — either a list of `submission_ids` or `user_ids`, with an optional flag to include already-graded submissions. The agent decides which targeting strategy to use based on teacher intent.
@@ -131,7 +132,8 @@ Block types: `text` · `table` · `card` · `chart` · `stat` · `alert`
 | `assignments` | get_assignment, list_assignments | `workspace-service` |
 | `submissions` | get_submission, list_submissions, submission_stats | `workspace-service` |
 | `grading` | suggest_assignment, approve_suggestion, grade_assignment, grading_results | `ai-orchestrator` (gRPC) |
-| `statistics` | workspace_stats, submission_stats | `workspace-service` |
+| `statistics` | workspace_stats, submission_stats, performance_report | `workspace-service` / `ai-orchestrator` |
+| `reports` | basic_workspace_report | `workspace-service` |
 
 ---
 
@@ -242,10 +244,10 @@ invalidated_at  TIMESTAMPTZ  nullable
 
 ### Networks
 
-All services communicate over a shared external Docker network:
+All platform services communicate over the shared external Docker network `agora-network`. The agent joins this network to reach workspace-service, user-service, and the ai-orchestrator.
 
 ```bash
-docker network create microservices-net
+docker network create agora-network
 ```
 
 ---
@@ -281,7 +283,8 @@ docker network create microservices-net
 
 ### Shared network
 ```bash
-docker network create microservices-net
+# Ensure the shared network exists (run once)
+docker network create agora-network
 ```
 
 ### Run locally
@@ -310,8 +313,8 @@ LLM_TEMPERATURE=0
 LLM_MAX_TOKENS=4096
 
 # Services
-USERS_SERVICE_URL=http://users-service:8001
-WORKSPACE_SERVICE_URL=http://workspace-service:8002
+USERS_SERVICE_URL=http://user-service:8080
+WORKSPACE_SERVICE_URL=http://workspace-service:8080
 
 # Orchestrator
 ORCHESTRATOR_GRPC_HOST=orchestrator-service

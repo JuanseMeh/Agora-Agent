@@ -70,24 +70,26 @@ make migrate  # runs without errors
 The agent can call `workspace-service` and `users-service` over HTTP, and `ai-orchestrator` over gRPC — all verified against real running services.
 
 ### Analysis steps — REST
-- [ ] Get the full list of available endpoints from `workspace-service` (check Postman collection already in the repo)
-- [ ] Confirm which endpoints are internal-only vs public — the agent should prefer internal ones
-- [ ] Confirm the response shape for: workspace, member, assignment, submission — map to Pydantic models before writing tools
-- [ ] Confirm `users-service` endpoint for fetching a user profile by ID
-- [ ] Confirm whether any endpoint requires headers beyond auth (e.g. `X-Workspace-Id`)
+- [x] Full endpoint list from `workspace-service` — mapped from Postman collection + Java source controllers
+- [x] Internal vs public — agent can use internal endpoints (no auth between services)
+- [x] Response shapes confirmed for workspace, member, assignment, submission, user, and report DTOs
+- [x] `user-service` endpoint: `GET /users/get-user` via `X-User-Id` header
+- [x] Headers: `X-User-Id` required for some endpoints; no auth token needed for service-to-service
 
 ### Analysis steps — gRPC
-- [ ] Drop final `.proto` file into `proto/` — the version in this repo must match the running orchestrator exactly
+- [ ] Copy `.proto` file from `ai/orchestration/ai/proto/ai_service.proto` into `proto/`
 - [ ] Run `make proto` and confirm stubs generate without errors
-- [ ] Manually call `SuggestAssignment` with a known `workspace_id` and `assignment_id` using a gRPC client (e.g. Postman or grpcurl) to verify the orchestrator is reachable and responding
+- [ ] Manually test each RPC with `grpcurl`: `SuggestAssignment`, `ApproveSuggestion`, `GradeAssignment`, `GeneratePerformanceReport`
 
 ### Build order
 1. `services/http_client.py` — base async httpx client, shared timeout config
-2. `services/workspace_service.py` — typed methods for workspace, assignment, submission, member endpoints
-3. `services/users_service.py` — typed methods for user profile endpoint
-4. `proto/` — drop proto file, run `make proto`, commit generated stubs
-5. `services/grpc_client.py` — channel + stub initialization, connection reuse
-6. `services/orchestrator_service.py` — typed wrappers for `SuggestAssignment`, `ApproveSuggestion`, `GradeAssignment`
+2. `services/workspace_service.py` — typed methods for workspace, assignment, submission, member, and report endpoints:
+   - Public: `GET /workspaces/{workspaceId}/reports/basic` (basic stats)
+   - Internal: `GET /internal/reports/workspaces/{workspaceId}/performance-data` (full perf report)
+3. `services/users_service.py` — typed methods for user profile, email lookup, existence check
+4. `proto/` — drop proto file, run `make proto`, generated stubs land in `api/proto/`
+5. `services/grpc_client.py` — gRPC channel + stub initialization, connection reuse
+6. `services/orchestrator_service.py` — typed wrappers for all 4 RPCs
 
 ### Done when
 Each service file has a corresponding `__main__` block or test that calls a real endpoint and prints the response. Nothing moves to Phase 3 until all three clients return real data.
@@ -236,11 +238,11 @@ POST to `/internal/events/grading-completed` with a valid payload creates a `gra
 Assumptions made during planning that must be validated before the relevant phase begins.
 
 | # | Assumption | Phase | Status |
-|---|---|---|---|
-| 1 | `workspace-service` internal routes are callable without auth from within the Docker network | 2 | unverified |
-| 2 | `ai-orchestrator` is reachable by container name on the shared network | 2 | unverified |
-| 3 | `SuggestAssignment` flow transitions from 'suggested' to 'graded' directly. Orchestrator writes to workspace-service | 2 | unverified |
-| 4 | `submission_stats` exists as an endpoint on `workspace-service` | 4 | unverified |
+|---|---|---|---|---|
+| 1 | `workspace-service` internal routes are callable without auth from within the Docker network | 2 | ✅ verified (no auth between services) |
+| 2 | `ai-orchestrator` is reachable by container name on the shared network | 2 | 🟡 pending test (should work on `agora-network`) |
+| 3 | `SuggestAssignment` flow: suggested → cached in Redis → approved → orchestrator persists to workspace-service | 2 | ✅ verified (orchestrator caches suggestions, persists on approve) |
+| 4 | `submission_stats` exists as an endpoint on `workspace-service` | 4 | ✅ resolved — `GET /workspaces/{workspaceId}/reports/basic` returns `BasicWorkspaceReportResponse` |
 | 5 | Gemini 2.0 Flash supports parallel tool calling via LangChain integration | 5 | unverified |
 | 6 | The orchestrator will send the webhook to the agent when grading completes | 7 | unverified |
 | 7 | `workspace_id` is always provided by the frontend — agent never needs to infer it | 3 | unverified |
