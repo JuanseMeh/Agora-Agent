@@ -12,13 +12,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY . .
 
 RUN if [ -d "proto" ] && ls proto/*.proto > /dev/null 2>&1; then \
-    mkdir -p proto/generated && \
     uv run python -m grpc_tools.protoc \
         -I./proto \
-        --python_out=./proto/generated \
-        --grpc_python_out=./proto/generated \
+        --python_out=./proto \
+        --grpc_python_out=./proto \
         proto/*.proto && \
-    touch proto/generated/__init__.py; \
+    sed -i 's/^import ai_service_pb2/from proto import ai_service_pb2/' proto/ai_service_pb2_grpc.py; \
     fi
 
 # --- Runtime ---

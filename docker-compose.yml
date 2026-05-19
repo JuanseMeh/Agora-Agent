@@ -15,7 +15,7 @@ services:
     env_file:
       - .env
     networks:
-      - microservices-net
+      - agora-network
 
   agent-db:
     image: postgres:18-alpine
@@ -26,7 +26,7 @@ services:
       POSTGRES_PASSWORD: agent
       POSTGRES_DB: agent
     ports:
-      - "5434:5432" # Host port 5434 to avoid conflict if 5432/5433 are used
+      - "5436:5432"
     volumes:
       - agent_db_data:/var/lib/postgresql/data
     healthcheck:
@@ -35,16 +35,16 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - microservices-net
+      - agora-network
 
   agent-redis:
     image: redis:7.2-alpine
     container_name: agent-redis
     restart: unless-stopped
     ports:
-      - "6380:6379" # Host port 6380 to avoid conflict
+      - "6380:6379"
     networks:
-      - microservices-net
+      - agora-network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -55,6 +55,6 @@ volumes:
   agent_db_data:
 
 networks:
-  microservices-net:
+  agora-network:
     external: true
-    name: microservices-net
+    name: agora-network
