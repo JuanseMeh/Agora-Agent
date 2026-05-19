@@ -20,5 +20,5 @@ migrate:
 
 
 proto:
-	python -m grpc_tools.protoc -I./proto --python_out=./api/proto --grpc_python_out=./api/proto ./proto/*.proto
-	touch api/proto/__init__.py
+	uv run python -m grpc_tools.protoc -I./proto --python_out=./proto --grpc_python_out=./proto ./proto/*.proto
+	sed -i 's/^import ai_service_pb2/from proto import ai_service_pb2/' proto/ai_service_pb2_grpc.py
