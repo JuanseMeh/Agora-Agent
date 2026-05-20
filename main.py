@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from config.settings import settings
-from db.pool import init_pool, close_pool
+from db.pool import init_pool, close_pool, init_redis, close_redis
 from services.http_client import init_http_clients, close_http_clients
 from services.grpc_client import init_grpc_client, close_grpc_client
 
@@ -9,11 +9,13 @@ from services.grpc_client import init_grpc_client, close_grpc_client
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_pool()
+    await init_redis()
     init_http_clients()
     await init_grpc_client()
     yield
     await close_grpc_client()
     await close_http_clients()
+    await close_redis()
     await close_pool()
 
 
@@ -27,7 +29,7 @@ app = FastAPI(
 
 @app.get("/health")
 async def health_check():
-    from db.pool import get_pool
+    from db.pool import get_pool, get_redis
     try:
         pool = get_pool()
         async with pool.acquire() as conn:
@@ -36,7 +38,20 @@ async def health_check():
     except Exception as e:
         db_status = f"error: {str(e)}"
 
-    return {"status": "ok", "service": "ai-agent", "database": db_status}
+    redis_ok = False
+    try:
+        r = get_redis()
+        await r.ping()
+        redis_ok = True
+    except Exception:
+        pass
+
+    return {
+        "status": "ok",
+        "service": "ai-agent",
+        "database": db_status,
+        "redis": "connected" if redis_ok else "disconnected",
+    }
 
 
 if __name__ == "__main__":
