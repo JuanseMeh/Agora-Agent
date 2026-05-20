@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     agent_max_iterations: int = Field(
         validation_alias="AGENT_MAX_ITERATIONS", default=10
     )
+    agent_memory_window: int = Field(
+        validation_alias="AGENT_MEMORY_WINDOW", default=20
+    )
 
 
 settings = Settings()
