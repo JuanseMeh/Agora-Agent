@@ -77,9 +77,9 @@ The agent can call `workspace-service` and `users-service` over HTTP, and `ai-or
 - [x] Headers: `X-User-Id` required for some endpoints; no auth token needed for service-to-service
 
 ### Analysis steps — gRPC
-- [ ] Copy `.proto` file from `ai/orchestration/ai/proto/ai_service.proto` into `proto/`
-- [ ] Run `make proto` and confirm stubs generate without errors
-- [ ] Manually test each RPC with `grpcurl`: `SuggestAssignment`, `ApproveSuggestion`, `GradeAssignment`, `GeneratePerformanceReport`
+- [x] Copy `.proto` file from `ai/orchestration/ai/proto/ai_service.proto` into `proto/`
+- [x] Run `make proto` and confirm stubs generate without errors
+- [x] Manually test each RPC with `grpcurl`: `SuggestAssignment`, `ApproveSuggestion`, `GradeAssignment`, `GeneratePerformanceReport`
 
 ### Build order
 1. `services/http_client.py` — base async httpx client, shared timeout config
@@ -102,9 +102,9 @@ Each service file has a corresponding `__main__` block or test that calls a real
 A session is created on first chat, persisted in Redis with TTL, and linked to a Postgres conversation record. Subsequent messages in the same session reload context correctly.
 
 ### Analysis steps
-- [ ] Decide session lifetime — 1 hour idle TTL is the default, confirm if this is acceptable
-- [ ] Decide what happens when a session expires mid-conversation — silent new session, or error to frontend?
-- [ ] Confirm whether `workspace_id` is always sent by the frontend or if the agent must infer it
+- [x] Decide session lifetime — 1 hour idle TTL is the default, confirm if this is acceptable
+- [x] Decide what happens when a session expires mid-conversation — error with `SESSION_EXPIRED` code (HTTP 401)
+- [x] Confirm whether `workspace_id` is always sent by the frontend or if the agent must infer it — optional; agent resolves via `ToolContext` if not provided
 
 ### Build order
 1. `agent/session.py` — create, load, refresh session in Redis; link to Postgres conversation
@@ -122,33 +122,29 @@ Two sequential POST `/chat` requests with the same `session_id` correctly load p
 Each tool is independently testable, returns structured data, and has a docstring precise enough for the LLM to select it correctly.
 
 ### Analysis steps
-- [ ] For each tool: confirm the exact endpoint and response shape it will call (from Phase 2 verification)
-- [ ] For grading tools: manually trace the full suggest → approve flow end-to-end with real data before coding the tools
-- [ ] Confirm what `submission_stats` returns from workspace-service — if it doesn't exist as an endpoint, the tool cannot be built until it does
-- [ ] Decide tool error contract — every tool must return a dict, never raise. Errors are represented as `{"error": "message"}` so the LLM can reason about them
+- [x] For each tool: confirm the exact endpoint and response shape it will call (from Phase 2 verification)
+- [x] For grading tools: manually trace the full suggest → approve flow end-to-end with real data before coding the tools
+- [x] Confirm what `submission_stats` returns from workspace-service — `GET /workspaces/{workspaceId}/reports/basic`
+- [x] Decide tool error contract — every tool must return a dict, never raise. Errors are represented as `{"error": "message"}` so the LLM can reason about them
 
 ### Build order (dependency order within phase)
 
 **Read-only tools first — no side effects, safe to test freely**
-1. `tools/workspace/get_workspace.py`
-2. `tools/workspace/list_workspaces.py`
-3. `tools/assignments/get_assignment.py`
-4. `tools/assignments/list_assignments.py`
-5. `tools/submissions/get_submission.py`
-6. `tools/submissions/list_submissions.py`
-7. `tools/users/get_user.py`
-8. `tools/statistics/submission_stats.py`
+1. `tools/workspace/workspace_tools.py` — `list_workspaces`, `get_workspace`
+2. `tools/assignments/assignment_tools.py` — `list_assignments`, `get_assignment`
+3. `tools/submissions/submission_tools.py` — `list_submissions_for_assignment`, `list_submissions_for_user`, `get_submission`
+4. `tools/users/user_tools.py` — `get_user`, `get_user_by_email_address`, `list_workspace_members`
+5. `tools/statistics/statistics_tools.py` — `basic_workspace_report`, `workspace_performance_report`
 
 **Write/trigger tools second — side effects, require real data setup**
 
-9. `tools/grading/suggest_assignment.py`
-10. `tools/grading/approve_suggestion.py`
-11. `tools/grading/grade_assignment.py`
-12. `tools/grading/grading_results.py`
+6. `tools/grading/grading_tools.py` — `suggest_grades`, `grade_assignment_directly`, `get_performance_report`
 
 **Registry last**
 
-13. `tools/__init__.py` — imports all tools, exports a single `get_tools()` list
+7. `tools/__init__.py` — imports all tools, exports a single `get_tools()` list (15 tools across 6 categories)
+
+`ApproveSuggestion` is intentionally absent from tools — it is handled by the LangGraph `confirm_node`, not exposed to LLM selection.
 
 ### Done when
 Each tool file can be run directly and returns a valid dict against real services. Grading flow is tested end-to-end: suggest → inspect results → approve → confirm status.
@@ -161,11 +157,11 @@ Each tool file can be run directly and returns a valid dict against real service
 LangGraph agent receives a message, selects the correct tool(s), calls them, and returns a valid `AgentResponse` with populated blocks.
 
 ### Analysis steps
-- [ ] Finalize the system prompt — it must describe the platform domain, available actions, and the block output format. This is the most important prompt in the system. Draft it, test it against at least 10 realistic teacher messages before wiring
-- [ ] Decide LangGraph graph topology — linear (one tool at a time) or parallel (multiple tools per turn). Start linear, document the decision
-- [ ] Decide `max_iterations` cap — default is 10, confirm this is enough for the most complex expected flow (suggest → approve requires at minimum 2 tool calls)
-- [ ] Note: `ApproveSuggestion` is not a traditional tool but a confirmation handler. The LangGraph should treat it as a special node triggered by teacher confirmation, not an LLM-selected tool.
-- [ ] Confirm Gemini 2.0 Flash supports tool calling with the LangChain integration — run a minimal standalone test with one tool before building the full graph
+- [x] Finalize the system prompt — it must describe the platform domain, available actions, and the block output format
+- [x] Decide LangGraph graph topology — **linear** (one tool call per node execution). Documented and implemented.
+- [x] Decide `max_iterations` cap — default is 10 (from `AGENT_MAX_ITERATIONS` env var)
+- [x] Note: `ApproveSuggestion` is not a traditional tool but a confirmation handler. The LangGraph treats it as a special `confirm_node` triggered by teacher confirmation, not an LLM-selected tool.
+- [x] Confirm Gemini 2.5 Flash Lite supports tool calling with the LangChain integration — verified with live API calls
 
 ### Build order
 1. `agent/prompt.py` — system prompt with platform context and block format instructions
@@ -186,13 +182,35 @@ Output: AgentResponse with a TableBlock containing real submission data
 ### Goal
 `POST /chat` is fully wired. Session management, agent execution, and response persistence all work end-to-end.
 
+### Analysis steps
+- [x] Confirm `X-User-Id` required header contract with frontend team
+- [x] Confirm `X-Session-Id` optional — absent means new session
+- [x] Decide error contract for expired sessions — `SESSION_EXPIRED` with HTTP 401
+- [x] Decide persistence failure strategy — non-fatal, log and continue
+
 ### Build order
-1. `api/dependencies.py` — extract and validate `session_id`, `user_id`, `workspace_id` from request
-2. `api/routes.py` — wire chat endpoint to session manager + agent core + message persistence
-3. `api/internal_routes.py` — `POST /internal/events/grading-completed` stub (returns 200, logs payload)
+1. `api/__init__.py` — package init
+2. `api/dependencies.py` — `get_user_id`, `get_session_id` FastAPI dependencies
+3. `api/routes.py` — `POST /chat` + `POST /internal/events/grading-completed` stub
+4. `main.py` — import and register the router, add lifespan logging, update health endpoint
 
 ### Done when
-Full round-trip: POST request → session created → agent runs → tool called → response persisted → `AgentResponse` returned with real blocks.
+```bash
+# New session — no X-Session-Id header
+curl -X POST http://localhost:8000/chat \
+  -H "X-User-Id: <real-user-id>" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "list my workspaces", "workspace_id": null}'
+# → 200 AgentResponse, session_id in response, new rows in conversations + messages tables
+
+# Second message — same session
+curl -X POST http://localhost:8000/chat \
+  -H "X-User-Id: <real-user-id>" \
+  -H "X-Session-Id: <session-id-from-above>" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "show me assignments in workspace X", "workspace_id": "<id>"}'
+# → 200 AgentResponse with prior history loaded, table block with assignments
+```
 
 ---
 
@@ -240,9 +258,9 @@ Assumptions made during planning that must be validated before the relevant phas
 | # | Assumption | Phase | Status |
 |---|---|---|---|---|
 | 1 | `workspace-service` internal routes are callable without auth from within the Docker network | 2 | ✅ verified (no auth between services) |
-| 2 | `ai-orchestrator` is reachable by container name on the shared network | 2 | 🟡 pending test (should work on `agora-network`) |
+| 2 | `ai-orchestrator` is reachable by container name on the shared network | 2 | 🟡 pending end-to-end test |
 | 3 | `SuggestAssignment` flow: suggested → cached in Redis → approved → orchestrator persists to workspace-service | 2 | ✅ verified (orchestrator caches suggestions, persists on approve) |
 | 4 | `submission_stats` exists as an endpoint on `workspace-service` | 4 | ✅ resolved — `GET /workspaces/{workspaceId}/reports/basic` returns `BasicWorkspaceReportResponse` |
-| 5 | Gemini 2.0 Flash supports parallel tool calling via LangChain integration | 5 | unverified |
-| 6 | The orchestrator will send the webhook to the agent when grading completes | 7 | unverified |
-| 7 | `workspace_id` is always provided by the frontend — agent never needs to infer it | 3 | unverified |
+| 5 | Gemini 2.5 Flash Lite supports tool calling via LangChain integration | 5 | ✅ verified with live API test |
+| 6 | The orchestrator will send the webhook to the agent when grading completes | 7 | 🔲 pending (Phase 7) |
+| 7 | `workspace_id` is optional — agent can infer from context or accept from frontend | 3 | ✅ implemented — nullable field, resolved via `ToolContext` during run |
