@@ -1,56 +1,66 @@
-from fastapi import FastAPI
+from __future__ import annotations
+
+import logging
 from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+
 from config.settings import settings
-from db.pool import init_pool, close_pool, init_redis, close_redis
-from services.http_client import init_http_clients, close_http_clients
-from services.grpc_client import init_grpc_client, close_grpc_client
+from db.pool import close_pool, close_redis, get_pool, init_pool, init_redis
+from services.grpc_client import close_grpc_client, init_grpc_client
+from services.http_client import close_http_clients, init_http_clients
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info("Starting ai-agent (env=%s)", settings.app_env)
     await init_pool()
     await init_redis()
     init_http_clients()
     await init_grpc_client()
+    logger.info("All clients initialized")
     yield
     await close_grpc_client()
     await close_http_clients()
     await close_redis()
     await close_pool()
+    logger.info("All clients closed")
 
 
 app = FastAPI(
-    title="AI Agent Service",
-    description="Conversational AI interface for the Agora platform",
+    title="Agora AI Agent",
     version="0.1.0",
     lifespan=lifespan,
 )
 
+from api.routes import router  # noqa: E402
+app.include_router(router)
+
 
 @app.get("/health")
-async def health_check():
-    from db.pool import get_pool, get_redis
+async def health() -> dict:
+    db_status = "connected"
+    redis_status = "connected"
+
     try:
         pool = get_pool()
-        async with pool.acquire() as conn:
-            await conn.fetchval("SELECT 1")
-        db_status = "connected"
-    except Exception as e:
-        db_status = f"error: {str(e)}"
-
-    redis_ok = False
-    try:
-        r = get_redis()
-        await r.ping()
-        redis_ok = True
+        await pool.fetchval("SELECT 1")
     except Exception:
-        pass
+        db_status = "error"
+
+    try:
+        from db.pool import get_redis
+        redis = get_redis()
+        await redis.ping()
+    except Exception:
+        redis_status = "error"
 
     return {
         "status": "ok",
-        "service": "ai-agent",
         "database": db_status,
-        "redis": "connected" if redis_ok else "disconnected",
+        "redis": redis_status,
     }
 
 
