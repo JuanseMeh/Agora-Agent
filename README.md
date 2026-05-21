@@ -37,7 +37,7 @@ The **AI Agent** is the conversational intelligence layer of this platform. It e
 |---|---|---|
 | `gateway-service` | Single entry point, request routing | REST |
 | `auth-service` | Token issuance, identity, permissions | REST |
-| `users-service` | User profiles, roles, preferences | REST |
+| `user-service` | User profiles, roles, preferences | REST |
 | `workspace-service` | Workspaces, members, assignments, and submissions | REST |
 | `ai-orchestrator` | Standardizes and executes LLM requests with rubrics, academic context and evaluation criteria. Handles automatic grading and periodic report generation — deterministic, traceable, reproducible | gRPC |
 | `ai-agent` *(this service)* | Conversational AI interface for teachers | REST + SSE |
@@ -82,14 +82,60 @@ Teacher (chat input)
 
 ---
 
+## API Endpoints
+
+### POST /chat
+
+Main chat interface. Accepts natural language instructions and returns structured `AgentResponse` blocks.
+
+**Headers:**
+- `X-User-Id` (required) — UUID of the requesting user
+- `X-Session-Id` (optional) — absent creates a new session
+
+**Request body:**
+```json
+{
+  "message": "list my workspaces",
+  "workspace_id": null
+}
+```
+
+**Responses:**
+| Status | Condition |
+|---|---|
+| `200` | Agent processed the request — `AgentResponse` in body |
+| `400` | Missing `X-User-Id` or empty message |
+| `401` | Session expired (Redis TTL elapsed) — `{"code": "SESSION_EXPIRED"}` |
+| `500` | Unhandled agent failure |
+
+### POST /internal/events/grading-completed
+
+Internal webhook called by `ai-orchestrator` when a grading job completes. Not public — only reachable within `agora-network`. Phase 7 will wire proactive synthesis; currently logs and returns 200.
+
+```json
+{
+  "suggestion_id": "string",
+  "workspace_id": "string",
+  "assignment_id": "string",
+  "teacher_id": "string"
+}
+```
+
+### GET /health
+
+Returns service health including database and Redis connectivity.
+
+---
+
 ## Orchestrator gRPC Contract
 
-The orchestrator exposes three RPC methods defining a two-phase grading workflow:
+The orchestrator exposes four RPC methods:
 
 ```
-SuggestAssignment   →  generates AI grading suggestions (not committed)
-ApproveSuggestion   →  commits a suggestion set as final grades
-GradeAssignment     →  direct grading without suggestion phase
+SuggestAssignment        →  generates AI grading suggestions (not committed)
+ApproveSuggestion        →  commits a suggestion set as final grades
+GradeAssignment          →  direct grading without suggestion phase
+GeneratePerformanceReport  →  per-assignment/student metrics + AI analysis
 ```
 
 Both `SuggestAssignment` and `GradeAssignment` accept flexible targeting — either a list of `submission_ids` or `user_ids`, with an optional flag to include already-graded submissions. The agent decides which targeting strategy to use based on teacher intent.
@@ -108,30 +154,40 @@ Every agent response returns a structured envelope — never plain text — so t
   "message": "Here are the grading results for your last session.",
   "blocks": [
     { "type": "stat", "label": "Submissions graded", "value": 38, "delta": null },
-    { "type": "chart", "chart_type": "bar", "title": "Score distribution" },
-    { "type": "table", "title": "Per-student results", "columns": ["..."], "rows": ["..."] },
-    { "type": "card", "title": "Top suggestion" }
+    { "type": "chart", "chart_type": "bar", "title": "Score distribution", "labels": ["0-49", "50-69", "70-100"], "values": [5, 12, 21] },
+    { "type": "table", "title": "Per-student results", "columns": ["Name", "Score"], "rows": [["Alice", "95"], ["Bob", "82"]] },
+    { "type": "card", "title": "Student", "fields": [{"label": "Name", "value": "Alice"}, {"label": "Score", "value": "95"}] }
   ],
-  "actions_triggered": ["suggest_assignment", "grading_results"],
+  "actions_triggered": ["suggest_grades", "get_performance_report"],
   "error": null
 }
 ```
 
-Block types: `text` · `table` · `card` · `chart` · `stat` · `alert`
+Block types: `text` · `stat` · `table` · `card` · `chart` · `alert`
+
+| Block | Fields |
+|---|---|
+| `text` | `content: str` |
+| `stat` | `label: str`, `value: int/float`, `delta: int/float\|null` |
+| `table` | `title: str`, `columns: list[str]`, `rows: list[list[str]]` |
+| `card` | `title: str`, `fields: list[{label, value}]` |
+| `chart` | `chart_type: str`, `title: str`, `labels: list[str]`, `values: list[float]` |
+| `alert` | `severity: str`, `message: str` |
 
 ---
 
 ## Tool Categories
 
+The agent exposes **15 tools** across **6 categories**. `approve_suggestion` is intentionally excluded from tool selection — it is a LangGraph confirmation node triggered by teacher intent, not an LLM-selected tool.
+
 | Category | Tools | Target Service |
 |---|---|---|
-| `users` | get_user, list_members | `users-service` |
-| `workspace` | get_workspace, list_workspaces | `workspace-service` |
-| `members` | list_members, get_member | `workspace-service` |
-| `assignments` | get_assignment, list_assignments | `workspace-service` |
-| `submissions` | get_submission, list_submissions, submission_stats | `workspace-service` |
-| `grading` | suggest_assignment, approve_suggestion, grade_assignment, grading_results | `ai-orchestrator` (gRPC) |
-| `statistics` | workspace_stats, submission_stats | `workspace-service` |
+| `workspace` | list_workspaces, get_workspace | `workspace-service` (REST) |
+| `assignments` | list_assignments, get_assignment | `workspace-service` (REST) |
+| `submissions` | list_submissions_for_assignment, list_submissions_for_user, get_submission | `workspace-service` (REST) |
+| `users` | get_user, get_user_by_email_address, list_workspace_members | `user-service` / `workspace-service` (REST) |
+| `statistics` | basic_workspace_report, workspace_performance_report | `workspace-service` (REST) |
+| `grading` | suggest_grades, grade_assignment_directly, get_performance_report | `ai-orchestrator` (gRPC) |
 
 ---
 
@@ -174,6 +230,8 @@ POST /internal/events/grading-completed
 Body: { suggestion_id, workspace_id, assignment_id, teacher_id }
 ```
 
+**Phase 6 status:** Stub implemented — logs payload and returns `{"status": "accepted"}`. Phase 7 wires proactive synthesis and SSE delivery.
+
 ---
 
 ## Database Model
@@ -196,19 +254,19 @@ ttl:   3600s
 
 **conversations**
 ```
-id              UUID         PK
-session_id      UUID
-user_id         UUID
-workspace_id    UUID         nullable
+id              UUID         PK         gen_random_uuid()
+session_id      UUID                   app-generated, ref'd in Redis
+user_id         UUID                   from X-User-Id header
+workspace_id    UUID         nullable  resolved during agent run if not provided
 started_at      TIMESTAMPTZ
 last_active_at  TIMESTAMPTZ
 ```
 
 **messages**
 ```
-id              UUID         PK
+id              UUID         PK         gen_random_uuid()
 conversation_id UUID         FK → conversations
-role            ENUM         'user' | 'assistant'
+role            ENUM         'user' | 'assistant' | 'system' | 'tool' | 'error'
 content         TEXT
 blocks          JSONB        nullable — assistant only
 tokens_used     INT          nullable
@@ -217,15 +275,15 @@ created_at      TIMESTAMPTZ
 
 **grading_summaries**
 ```
-id              UUID         PK
+id              UUID         PK         gen_random_uuid()
 conversation_id UUID         FK → conversations, nullable (proactive)
 workspace_id    UUID
 assignment_id   UUID
-suggestion_id   TEXT         orchestrator-owned ID
+suggestion_id   TEXT         orchestrator-owned ID from gRPC response
 status          ENUM         'suggested' | 'approved' | 'graded' | 'invalidated'
-summary_blocks  JSONB
+summary_blocks  JSONB        cached feedback blocks for proactive delivery
 generated_at    TIMESTAMPTZ
-invalidated_at  TIMESTAMPTZ  nullable
+invalidated_at  TIMESTAMPTZ  nullable — set on regrade
 ```
 
 ---
@@ -242,10 +300,10 @@ invalidated_at  TIMESTAMPTZ  nullable
 
 ### Networks
 
-All services communicate over a shared external Docker network:
+All platform services communicate over the shared external Docker network `agora-network`. The agent joins this network to reach workspace-service, user-service, and the ai-orchestrator.
 
 ```bash
-docker network create microservices-net
+docker network create agora-network
 ```
 
 ---
@@ -258,12 +316,12 @@ docker network create microservices-net
 | Package manager | `uv` |
 | API framework | FastAPI + Uvicorn |
 | Agent framework | LangGraph |
-| LLM | Gemini 2.0 Flash (`langchain-google-genai`) |
+| LLM | Gemini 2.5 Flash Lite (`langchain-google-genai`) |
 | REST client | `httpx` (async) |
 | gRPC client | `grpcio` + generated protobuf stubs |
 | Session store | Redis 7 |
 | Persistent DB | PostgreSQL 16 |
-| ORM | SQLAlchemy 2 (async) + Alembic migrations |
+| DB client | asyncpg (raw async queries) + Alembic migrations |
 | Validation | Pydantic v2 + pydantic-settings |
 | Serialization | `orjson` |
 | Linting / formatting | Ruff |
@@ -281,7 +339,8 @@ docker network create microservices-net
 
 ### Shared network
 ```bash
-docker network create microservices-net
+# Ensure the shared network exists (run once)
+docker network create agora-network
 ```
 
 ### Run locally
@@ -305,13 +364,13 @@ make logs       # tail agent container logs
 ```bash
 # LLM
 GOOGLE_API_KEY=
-LLM_MODEL=gemini-2.0-flash
+LLM_MODEL=gemini-2.5-flash-lite
 LLM_TEMPERATURE=0
 LLM_MAX_TOKENS=4096
 
 # Services
-USERS_SERVICE_URL=http://users-service:8001
-WORKSPACE_SERVICE_URL=http://workspace-service:8002
+USERS_SERVICE_URL=http://user-service:8080
+WORKSPACE_SERVICE_URL=http://workspace-service:8080
 
 # Orchestrator
 ORCHESTRATOR_GRPC_HOST=orchestrator-service
@@ -329,6 +388,7 @@ APP_PORT=8000
 APP_ENV=development
 LOG_LEVEL=INFO
 AGENT_MAX_ITERATIONS=10
+AGENT_MEMORY_WINDOW=20
 ```
 
 ---
@@ -339,7 +399,10 @@ AGENT_MAX_ITERATIONS=10
 - **`workspace-service` owns four domains** — Workspaces, Members, Assignments, and Submissions. All four are queried through the same service URL.
 - **gRPC stubs are generated at build time** inside the Docker builder stage. Run `make proto` locally after any `.proto` changes.
 - The agent uses **LangGraph** instead of LangChain's `AgentExecutor` for explicit control over the tool-calling loop and the suggest → approve grading flow.
-- **Grading is two-phase** — `SuggestAssignment` produces a `suggestion_id` the agent must hold in conversation state until the teacher approves or discards it.
+- **Grading is two-phase** — `suggest_grades` produces a `suggestion_id` held in `ToolContext.pending_suggestion_id` until the teacher approves or discards it. The approval is handled by the LangGraph `confirm_node`, not an LLM-selected tool.
+- **Graph topology is linear** — one tool call per node execution. This simplifies debugging and prevents the LLM from making parallel tool calls with conflicting side effects.
+- **Message persistence is non-fatal** in both directions — a DB write failure logs and continues so a storage hiccup never kills a live chat response.
+- Agent response uses **structured blocks** (`stat`, `table`, `card`, `chart`, `alert`, `text`) that the frontend renders as rich UI components — never plain text.
 - User IDs are UUIDs across all services. The proto file uses `string` for `user_id` fields.
 
 ---
