@@ -18,8 +18,10 @@ import logging
 
 from agent.graph import AgentState, compile_graph
 from agent.memory import build_initial_state_messages
+from agent.prompt import SYSTEM_PROMPT
 from agent.response_builder import build_response
 from agent.session import SessionData
+from langchain_core.messages import SystemMessage
 from schemas.response import AgentResponse, AlertBlock
 from tools.context import ToolContext
 
@@ -50,7 +52,7 @@ async def run(
     )
 
     initial_state: AgentState = {
-        "messages": messages,
+        "messages": [SystemMessage(content=SYSTEM_PROMPT)] + messages,
         "ctx": ctx,
         "iteration": 0,
         "has_error": False,
