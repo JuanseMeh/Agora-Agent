@@ -87,6 +87,100 @@ async def chat(
     return response
 
 
+class SuggestGradesRequest(BaseModel):
+    workspace_id: str
+    assignment_id: str
+    submission_ids: list[str] | None = None
+    user_ids: list[str] | None = None
+    include_already_graded: bool = False
+
+
+class ApproveSuggestionRequest(BaseModel):
+    suggestion_id: str
+
+
+@router.post("/suggest-grades")
+async def suggest_grades(
+    body: SuggestGradesRequest,
+    user_id: str = Depends(get_user_id),
+) -> dict:
+    from services.orchestrator_service import suggest_assignment
+
+    logger.info(
+        "suggest_grades: workspace=%s assignment=%s user=%s",
+        body.workspace_id, body.assignment_id, user_id,
+    )
+
+    result = await suggest_assignment(
+        workspace_id=body.workspace_id,
+        assignment_id=body.assignment_id,
+        requester_user_id=user_id,
+        submission_ids=body.submission_ids,
+        user_ids=body.user_ids,
+        include_already_graded=body.include_already_graded,
+    )
+
+    return {
+        "suggestion_id": result.suggestion_id,
+        "results": [
+            {
+                "submission_id": r.submission_id,
+                "total_score": r.total_score,
+                "max_score": r.max_score,
+                "feedback_summary": r.feedback_summary,
+                "grading_model": r.grading_model,
+                "evaluated_at": r.evaluated_at,
+                "criteria_results": [
+                    {
+                        "criterion_id": c.criterion_id,
+                        "criterion_name": c.criterion_name,
+                        "score": c.score,
+                        "max_score": c.max_score,
+                        "feedback": c.feedback,
+                        "matched_level": c.matched_level,
+                    }
+                    for c in r.criteria_results
+                ],
+            }
+            for r in result.results
+        ],
+        "stats": {
+            "average_score": result.stats.average_score,
+            "max_score": result.stats.max_score,
+            "graded_submissions": result.stats.graded_submissions,
+        },
+    }
+
+
+@router.post("/approve-suggestion")
+async def approve_suggestion(
+    body: ApproveSuggestionRequest,
+) -> dict:
+    from services.orchestrator_service import approve_suggestion
+
+    logger.info(
+        "approve_suggestion: suggestion_id=%s",
+        body.suggestion_id,
+    )
+
+    result = await approve_suggestion(body.suggestion_id)
+
+    return {
+        "suggestion_id": result.suggestion_id,
+        "results": [
+            {
+                "submission_id": r.submission_id,
+                "total_score": r.total_score,
+                "max_score": r.max_score,
+                "feedback_summary": r.feedback_summary,
+                "grading_model": r.grading_model,
+                "evaluated_at": r.evaluated_at,
+            }
+            for r in result.results
+        ],
+    }
+
+
 @router.post("/internal/events/grading-completed")
 async def grading_completed(event: GradingCompletedEvent) -> dict:
     logger.info(
