@@ -14,13 +14,12 @@ import json
 import logging
 from typing import Annotated, Literal
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
-from agent.prompt import SYSTEM_PROMPT
 from config.settings import settings
 from services.orchestrator_service import approve_suggestion
 from tools import get_tools
@@ -144,8 +143,7 @@ async def confirm_node(state: AgentState) -> dict:
 
 
 async def call_llm_node(state: AgentState, llm) -> dict:
-    messages = [SystemMessage(content=SYSTEM_PROMPT)] + state["messages"]
-    response: AIMessage = await llm.ainvoke(messages)
+    response: AIMessage = await llm.ainvoke(state["messages"])
 
     logger.debug(
         "LLM response: tool_calls=%d content_len=%d",
