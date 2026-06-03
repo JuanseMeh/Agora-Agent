@@ -15,7 +15,7 @@ import logging
 from typing import Annotated, Literal
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
@@ -33,6 +33,7 @@ class AgentState(TypedDict):
     ctx: ToolContext
     iteration: int
     has_error: bool
+    unexpected_error: bool
     approval_pending: bool
     confirmed: bool
     actions_triggered: list[str]
@@ -50,22 +51,24 @@ Phrases like "no", "discard", "redo", "cancel", "show me again" -> NO.
 Ambiguous or unrelated messages -> NO."""
 
 
-def _make_llm(tools: list) -> ChatGoogleGenerativeAI:
-    llm = ChatGoogleGenerativeAI(
+def _make_llm(tools: list) -> ChatOpenAI:
+    llm = ChatOpenAI(
         model=settings.llm_model,
         temperature=settings.llm_temperature,
-        max_output_tokens=settings.llm_max_tokens,
-        google_api_key=settings.google_api_key,
+        max_tokens=settings.llm_max_tokens,
+        api_key=settings.openai_api_key,
+        base_url=settings.openai_base_url,
     )
     return llm.bind_tools(tools)
 
 
-def _make_classifier_llm() -> ChatGoogleGenerativeAI:
-    return ChatGoogleGenerativeAI(
+def _make_classifier_llm() -> ChatOpenAI:
+    return ChatOpenAI(
         model=settings.llm_model,
         temperature=0,
-        max_output_tokens=10,
-        google_api_key=settings.google_api_key,
+        max_tokens=10,
+        api_key=settings.openai_api_key,
+        base_url=settings.openai_base_url,
     )
 
 
@@ -103,6 +106,9 @@ async def confirm_node(state: AgentState) -> dict:
 
         ctx.pending_suggestion_id = None
         ctx.pending_assignment_id = None
+
+        from agent.session import clear_session_pending
+        await clear_session_pending(ctx.session_id)
 
         logger.info(
             "Suggestion approved: %s results=%d", suggestion_id, len(result.results)
@@ -150,7 +156,13 @@ async def call_llm_node(state: AgentState, llm) -> dict:
         len(response.tool_calls) if response.tool_calls else 0,
         len(response.content) if response.content else 0,
     )
-    return {"messages": [response]}
+
+    had_prev_error = state.get("has_error", False)
+    updates: dict = {"messages": [response]}
+    if had_prev_error:
+        updates["has_error"] = False
+        updates["unexpected_error"] = False
+    return updates
 
 
 async def call_tool_node(state: AgentState, tool_map: dict) -> dict:
@@ -162,9 +174,13 @@ async def call_tool_node(state: AgentState, tool_map: dict) -> dict:
     tool_id = tool_call["id"]
 
     tool = tool_map.get(tool_name)
+    unexpected_error = False
+    has_error = False
+
     if tool is None:
         result = {"error": f"Tool '{tool_name}' not found."}
         has_error = True
+        unexpected_error = True
     else:
         try:
             raw_result = await tool.ainvoke(tool_args)
@@ -174,6 +190,7 @@ async def call_tool_node(state: AgentState, tool_map: dict) -> dict:
             logger.exception("Tool %s raised unexpectedly", tool_name)
             result = {"error": f"Tool {tool_name} failed: {e}"}
             has_error = True
+            unexpected_error = True
 
     if has_error:
         logger.warning("Tool %s returned error: %s", tool_name, result.get("error"))
@@ -189,6 +206,7 @@ async def call_tool_node(state: AgentState, tool_map: dict) -> dict:
     return {
         "messages": [tool_message],
         "has_error": has_error,
+        "unexpected_error": unexpected_error,
         "iteration": state["iteration"] + 1,
         "actions_triggered": triggered,
     }

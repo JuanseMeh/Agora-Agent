@@ -10,9 +10,10 @@ class Settings(BaseSettings):
         populate_by_name=True,
     )
 
-    # LLM
-    google_api_key: str = Field(validation_alias="GOOGLE_API_KEY")
-    llm_model: str = Field(validation_alias="LLM_MODEL", default="gemini-2.0-flash")
+    # LLM — OpenAI-compatible (xAI, OpenAI, Anthropic, etc.)
+    openai_api_key: str = Field(validation_alias="OPENAI_API_KEY")
+    openai_base_url: str = Field(validation_alias="OPENAI_BASE_URL", default="https://api.x.ai/v1")
+    llm_model: str = Field(validation_alias="LLM_MODEL", default="grok-2")
     llm_temperature: float = Field(validation_alias="LLM_TEMPERATURE", default=0.0)
     llm_max_tokens: int = Field(validation_alias="LLM_MAX_TOKENS", default=4096)
 
