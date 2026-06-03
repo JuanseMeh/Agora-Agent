@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10\x61i_service.proto\x12\x02\x61i\"\xac\x01\n\x18SuggestAssignmentRequest\x12\x14\n\x0cworkspace_id\x18\x01 \x01(\x05\x12\x15\n\rassignment_id\x18\x02 \x01(\x05\x12\x19\n\x11requester_user_id\x18\x03 \x01(\t\x12\x16\n\x0esubmission_ids\x18\x04 \x03(\x05\x12\x10\n\x08user_ids\x18\x05 \x03(\t\x12\x1e\n\x16include_already_graded\x18\x06 \x01(\x08\"W\n\x0fSuggestionStats\x12\x15\n\raverage_score\x18\x01 \x01(\x01\x12\x11\n\tmax_score\x18\x02 \x01(\x01\x12\x1a\n\x12graded_submissions\x18\x03 \x01(\x05\"z\n\x19SuggestAssignmentResponse\x12\x15\n\rsuggestion_id\x18\x01 \x01(\t\x12\"\n\x07results\x18\x02 \x03(\x0b\x32\x11.ai.GradingResult\x12\"\n\x05stats\x18\x03 \x01(\x0b\x32\x13.ai.SuggestionStats\"1\n\x18\x41pproveSuggestionRequest\x12\x15\n\rsuggestion_id\x18\x01 \x01(\t\"V\n\x19\x41pproveSuggestionResponse\x12\x15\n\rsuggestion_id\x18\x01 \x01(\t\x12\"\n\x07results\x18\x02 \x03(\x0b\x32\x11.ai.GradingResult\"\x8f\x01\n\x16GradeAssignmentRequest\x12\x14\n\x0cworkspace_id\x18\x01 \x01(\x05\x12\x15\n\rassignment_id\x18\x02 \x01(\x05\x12\x16\n\x0esubmission_ids\x18\x03 \x03(\x05\x12\x10\n\x08user_ids\x18\x04 \x03(\t\x12\x1e\n\x16include_already_graded\x18\x05 \x01(\x08\"\x8a\x01\n\x0f\x43riterionResult\x12\x14\n\x0c\x63riterion_id\x18\x01 \x01(\t\x12\x16\n\x0e\x63riterion_name\x18\x02 \x01(\t\x12\r\n\x05score\x18\x03 \x01(\x01\x12\x11\n\tmax_score\x18\x04 \x01(\x01\x12\x10\n\x08\x66\x65\x65\x64\x62\x61\x63k\x18\x05 \x01(\t\x12\x15\n\rmatched_level\x18\x06 \x01(\t\"\xd7\x01\n\rGradingResult\x12\x11\n\tresult_id\x18\x01 \x01(\t\x12\x15\n\rsubmission_id\x18\x02 \x01(\x05\x12\x13\n\x0btotal_score\x18\x03 \x01(\x01\x12\x11\n\tmax_score\x18\x04 \x01(\x01\x12\x18\n\x10\x66\x65\x65\x64\x62\x61\x63k_summary\x18\x05 \x01(\t\x12\x15\n\rgrading_model\x18\x06 \x01(\t\x12\x14\n\x0c\x65valuated_at\x18\x07 \x01(\t\x12-\n\x10\x63riteria_results\x18\x08 \x03(\x0b\x32\x13.ai.CriterionResult\"=\n\x17GradeAssignmentResponse\x12\"\n\x07results\x18\x01 \x03(\x0b\x32\x11.ai.GradingResult\"f\n GeneratePerformanceReportRequest\x12\x14\n\x0cworkspace_id\x18\x01 \x01(\x05\x12\x1a\n\rassignment_id\x18\x02 \x01(\x05H\x00\x88\x01\x01\x42\x10\n\x0e_assignment_id\"\xf7\x01\n\x15\x41ssignmentPerformance\x12\x15\n\rassignment_id\x18\x01 \x01(\x05\x12\x17\n\x0f\x61ssignment_name\x18\x02 \x01(\t\x12\x19\n\x11total_submissions\x18\x03 \x01(\x05\x12\x1a\n\x12graded_submissions\x18\x04 \x01(\x05\x12\x1b\n\x13pending_submissions\x18\x05 \x01(\x05\x12\x15\n\raverage_score\x18\x06 \x01(\x01\x12\x11\n\tmax_score\x18\x07 \x01(\x01\x12\x1a\n\x12\x66\x61iled_submissions\x18\x08 \x01(\x05\x12\x14\n\x0c\x66\x61ilure_rate\x18\t \x01(\x01\"\x90\x01\n\x12StudentPerformance\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x19\n\x11total_submissions\x18\x02 \x01(\x05\x12\x1a\n\x12graded_submissions\x18\x03 \x01(\x05\x12\x1b\n\x13pending_submissions\x18\x04 \x01(\x05\x12\x15\n\raverage_score\x18\x05 \x01(\x01\"\xdc\x02\n!GeneratePerformanceReportResponse\x12\x14\n\x0cworkspace_id\x18\x01 \x01(\x05\x12\x1a\n\rassignment_id\x18\x02 \x01(\x05H\x00\x88\x01\x01\x12\x19\n\x11total_assignments\x18\x03 \x01(\x05\x12\x19\n\x11total_submissions\x18\x04 \x01(\x05\x12\x1a\n\x12graded_submissions\x18\x05 \x01(\x05\x12\x1b\n\x13pending_submissions\x18\x06 \x01(\x05\x12\x15\n\raverage_score\x18\x07 \x01(\x01\x12\x13\n\x0b\x61i_analysis\x18\x08 \x01(\t\x12.\n\x0b\x61ssignments\x18\t \x03(\x0b\x32\x19.ai.AssignmentPerformance\x12(\n\x08students\x18\n \x03(\x0b\x32\x16.ai.StudentPerformanceB\x10\n\x0e_assignment_id2\xe5\x02\n\tAiService\x12P\n\x11SuggestAssignment\x12\x1c.ai.SuggestAssignmentRequest\x1a\x1d.ai.SuggestAssignmentResponse\x12P\n\x11\x41pproveSuggestion\x12\x1c.ai.ApproveSuggestionRequest\x1a\x1d.ai.ApproveSuggestionResponse\x12J\n\x0fGradeAssignment\x12\x1a.ai.GradeAssignmentRequest\x1a\x1b.ai.GradeAssignmentResponse\x12h\n\x19GeneratePerformanceReport\x12$.ai.GeneratePerformanceReportRequest\x1a%.ai.GeneratePerformanceReportResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10\x61i_service.proto\x12\x02\x61i\"\xac\x01\n\x18SuggestAssignmentRequest\x12\x14\n\x0cworkspace_id\x18\x01 \x01(\x05\x12\x15\n\rassignment_id\x18\x02 \x01(\x05\x12\x19\n\x11requester_user_id\x18\x03 \x01(\t\x12\x16\n\x0esubmission_ids\x18\x04 \x03(\x05\x12\x10\n\x08user_ids\x18\x05 \x03(\t\x12\x1e\n\x16include_already_graded\x18\x06 \x01(\x08\"W\n\x0fSuggestionStats\x12\x15\n\raverage_score\x18\x01 \x01(\x01\x12\x11\n\tmax_score\x18\x02 \x01(\x01\x12\x1a\n\x12graded_submissions\x18\x03 \x01(\x05\"z\n\x19SuggestAssignmentResponse\x12\x15\n\rsuggestion_id\x18\x01 \x01(\t\x12\"\n\x07results\x18\x02 \x03(\x0b\x32\x11.ai.GradingResult\x12\"\n\x05stats\x18\x03 \x01(\x0b\x32\x13.ai.SuggestionStats\"\x89\x01\n\x11\x43riterionOverride\x12\x15\n\rsubmission_id\x18\x01 \x01(\x05\x12\x14\n\x0c\x63riterion_id\x18\x02 \x01(\t\x12\x16\n\x0eoriginal_score\x18\x03 \x01(\x01\x12\x15\n\rteacher_score\x18\x04 \x01(\x01\x12\x18\n\x10teacher_feedback\x18\x05 \x01(\t\"[\n\x18\x41pproveSuggestionRequest\x12\x15\n\rsuggestion_id\x18\x01 \x01(\t\x12(\n\toverrides\x18\x02 \x03(\x0b\x32\x15.ai.CriterionOverride\"V\n\x19\x41pproveSuggestionResponse\x12\x15\n\rsuggestion_id\x18\x01 \x01(\t\x12\"\n\x07results\x18\x02 \x03(\x0b\x32\x11.ai.GradingResult\"\x8f\x01\n\x16GradeAssignmentRequest\x12\x14\n\x0cworkspace_id\x18\x01 \x01(\x05\x12\x15\n\rassignment_id\x18\x02 \x01(\x05\x12\x16\n\x0esubmission_ids\x18\x03 \x03(\x05\x12\x10\n\x08user_ids\x18\x04 \x03(\t\x12\x1e\n\x16include_already_graded\x18\x05 \x01(\x08\"\x8a\x01\n\x0f\x43riterionResult\x12\x14\n\x0c\x63riterion_id\x18\x01 \x01(\t\x12\x16\n\x0e\x63riterion_name\x18\x02 \x01(\t\x12\r\n\x05score\x18\x03 \x01(\x01\x12\x11\n\tmax_score\x18\x04 \x01(\x01\x12\x10\n\x08\x66\x65\x65\x64\x62\x61\x63k\x18\x05 \x01(\t\x12\x15\n\rmatched_level\x18\x06 \x01(\t\"\xd7\x01\n\rGradingResult\x12\x11\n\tresult_id\x18\x01 \x01(\t\x12\x15\n\rsubmission_id\x18\x02 \x01(\x05\x12\x13\n\x0btotal_score\x18\x03 \x01(\x01\x12\x11\n\tmax_score\x18\x04 \x01(\x01\x12\x18\n\x10\x66\x65\x65\x64\x62\x61\x63k_summary\x18\x05 \x01(\t\x12\x15\n\rgrading_model\x18\x06 \x01(\t\x12\x14\n\x0c\x65valuated_at\x18\x07 \x01(\t\x12-\n\x10\x63riteria_results\x18\x08 \x03(\x0b\x32\x13.ai.CriterionResult\"=\n\x17GradeAssignmentResponse\x12\"\n\x07results\x18\x01 \x03(\x0b\x32\x11.ai.GradingResult\"f\n GeneratePerformanceReportRequest\x12\x14\n\x0cworkspace_id\x18\x01 \x01(\x05\x12\x1a\n\rassignment_id\x18\x02 \x01(\x05H\x00\x88\x01\x01\x42\x10\n\x0e_assignment_id\"\xf7\x01\n\x15\x41ssignmentPerformance\x12\x15\n\rassignment_id\x18\x01 \x01(\x05\x12\x17\n\x0f\x61ssignment_name\x18\x02 \x01(\t\x12\x19\n\x11total_submissions\x18\x03 \x01(\x05\x12\x1a\n\x12graded_submissions\x18\x04 \x01(\x05\x12\x1b\n\x13pending_submissions\x18\x05 \x01(\x05\x12\x15\n\raverage_score\x18\x06 \x01(\x01\x12\x11\n\tmax_score\x18\x07 \x01(\x01\x12\x1a\n\x12\x66\x61iled_submissions\x18\x08 \x01(\x05\x12\x14\n\x0c\x66\x61ilure_rate\x18\t \x01(\x01\"\x90\x01\n\x12StudentPerformance\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x19\n\x11total_submissions\x18\x02 \x01(\x05\x12\x1a\n\x12graded_submissions\x18\x03 \x01(\x05\x12\x1b\n\x13pending_submissions\x18\x04 \x01(\x05\x12\x15\n\raverage_score\x18\x05 \x01(\x01\"\xdc\x02\n!GeneratePerformanceReportResponse\x12\x14\n\x0cworkspace_id\x18\x01 \x01(\x05\x12\x1a\n\rassignment_id\x18\x02 \x01(\x05H\x00\x88\x01\x01\x12\x19\n\x11total_assignments\x18\x03 \x01(\x05\x12\x19\n\x11total_submissions\x18\x04 \x01(\x05\x12\x1a\n\x12graded_submissions\x18\x05 \x01(\x05\x12\x1b\n\x13pending_submissions\x18\x06 \x01(\x05\x12\x15\n\raverage_score\x18\x07 \x01(\x01\x12\x13\n\x0b\x61i_analysis\x18\x08 \x01(\t\x12.\n\x0b\x61ssignments\x18\t \x03(\x0b\x32\x19.ai.AssignmentPerformance\x12(\n\x08students\x18\n \x03(\x0b\x32\x16.ai.StudentPerformanceB\x10\n\x0e_assignment_id2\xe5\x02\n\tAiService\x12P\n\x11SuggestAssignment\x12\x1c.ai.SuggestAssignmentRequest\x1a\x1d.ai.SuggestAssignmentResponse\x12P\n\x11\x41pproveSuggestion\x12\x1c.ai.ApproveSuggestionRequest\x1a\x1d.ai.ApproveSuggestionResponse\x12J\n\x0fGradeAssignment\x12\x1a.ai.GradeAssignmentRequest\x1a\x1b.ai.GradeAssignmentResponse\x12h\n\x19GeneratePerformanceReport\x12$.ai.GeneratePerformanceReportRequest\x1a%.ai.GeneratePerformanceReportResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -37,26 +37,28 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_SUGGESTIONSTATS']._serialized_end=286
   _globals['_SUGGESTASSIGNMENTRESPONSE']._serialized_start=288
   _globals['_SUGGESTASSIGNMENTRESPONSE']._serialized_end=410
-  _globals['_APPROVESUGGESTIONREQUEST']._serialized_start=412
-  _globals['_APPROVESUGGESTIONREQUEST']._serialized_end=461
-  _globals['_APPROVESUGGESTIONRESPONSE']._serialized_start=463
-  _globals['_APPROVESUGGESTIONRESPONSE']._serialized_end=549
-  _globals['_GRADEASSIGNMENTREQUEST']._serialized_start=552
-  _globals['_GRADEASSIGNMENTREQUEST']._serialized_end=695
-  _globals['_CRITERIONRESULT']._serialized_start=698
-  _globals['_CRITERIONRESULT']._serialized_end=836
-  _globals['_GRADINGRESULT']._serialized_start=839
-  _globals['_GRADINGRESULT']._serialized_end=1054
-  _globals['_GRADEASSIGNMENTRESPONSE']._serialized_start=1056
-  _globals['_GRADEASSIGNMENTRESPONSE']._serialized_end=1117
-  _globals['_GENERATEPERFORMANCEREPORTREQUEST']._serialized_start=1119
-  _globals['_GENERATEPERFORMANCEREPORTREQUEST']._serialized_end=1221
-  _globals['_ASSIGNMENTPERFORMANCE']._serialized_start=1224
-  _globals['_ASSIGNMENTPERFORMANCE']._serialized_end=1471
-  _globals['_STUDENTPERFORMANCE']._serialized_start=1474
-  _globals['_STUDENTPERFORMANCE']._serialized_end=1618
-  _globals['_GENERATEPERFORMANCEREPORTRESPONSE']._serialized_start=1621
-  _globals['_GENERATEPERFORMANCEREPORTRESPONSE']._serialized_end=1969
-  _globals['_AISERVICE']._serialized_start=1972
-  _globals['_AISERVICE']._serialized_end=2329
+  _globals['_CRITERIONOVERRIDE']._serialized_start=413
+  _globals['_CRITERIONOVERRIDE']._serialized_end=550
+  _globals['_APPROVESUGGESTIONREQUEST']._serialized_start=552
+  _globals['_APPROVESUGGESTIONREQUEST']._serialized_end=643
+  _globals['_APPROVESUGGESTIONRESPONSE']._serialized_start=645
+  _globals['_APPROVESUGGESTIONRESPONSE']._serialized_end=731
+  _globals['_GRADEASSIGNMENTREQUEST']._serialized_start=734
+  _globals['_GRADEASSIGNMENTREQUEST']._serialized_end=877
+  _globals['_CRITERIONRESULT']._serialized_start=880
+  _globals['_CRITERIONRESULT']._serialized_end=1018
+  _globals['_GRADINGRESULT']._serialized_start=1021
+  _globals['_GRADINGRESULT']._serialized_end=1236
+  _globals['_GRADEASSIGNMENTRESPONSE']._serialized_start=1238
+  _globals['_GRADEASSIGNMENTRESPONSE']._serialized_end=1299
+  _globals['_GENERATEPERFORMANCEREPORTREQUEST']._serialized_start=1301
+  _globals['_GENERATEPERFORMANCEREPORTREQUEST']._serialized_end=1403
+  _globals['_ASSIGNMENTPERFORMANCE']._serialized_start=1406
+  _globals['_ASSIGNMENTPERFORMANCE']._serialized_end=1653
+  _globals['_STUDENTPERFORMANCE']._serialized_start=1656
+  _globals['_STUDENTPERFORMANCE']._serialized_end=1800
+  _globals['_GENERATEPERFORMANCEREPORTRESPONSE']._serialized_start=1803
+  _globals['_GENERATEPERFORMANCEREPORTRESPONSE']._serialized_end=2151
+  _globals['_AISERVICE']._serialized_start=2154
+  _globals['_AISERVICE']._serialized_end=2511
 # @@protoc_insertion_point(module_scope)
