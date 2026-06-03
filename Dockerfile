@@ -7,7 +7,9 @@ ENV UV_COMPILE_BYTECODE=1
 
 COPY pyproject.toml uv.lock .python-version ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen
+    uv sync --frozen 2>/dev/null || uv sync
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install langchain-openai
 
 COPY . .
 

@@ -98,6 +98,12 @@ def _parse_llm_output(content: str) -> tuple[str, list[AnyBlock], list[str]]:
         if block is not None:
             blocks.append(block)
 
+    if not message.strip():
+        for b in blocks:
+            if isinstance(b, TextBlock) and b.content.strip():
+                message = b.content
+                break
+
     return message, blocks, actions
 
 
@@ -155,6 +161,42 @@ def _build_approval_response(
     )
 
 
+_COLUMN_LABELS = {
+    "id": "ID", "name": "Nombre", "title": "Nombre",
+    "description": "Descripción", "role": "Rol", "email": "Correo",
+    "dueDate": "Fecha límite", "maxScore": "Puntaje máx",
+    "status": "Estado",
+}
+
+
+def _auto_blocks_from_tool_result(result: dict, tool_name: str) -> list[AnyBlock]:
+    if "workspaces" in result:
+        items = result["workspaces"]
+        if isinstance(items, list) and items:
+            keys = [k for k in list(items[0].keys()) if k != "id"]
+            columns = [_COLUMN_LABELS.get(k, k) for k in keys]
+            rows = [[str(item.get(k, "")) for k in keys] for item in items]
+            return [TableBlock(title="Espacios de trabajo", columns=columns, rows=rows)]
+
+    if "assignments" in result:
+        items = result["assignments"]
+        if isinstance(items, list) and items:
+            keys = [k for k in list(items[0].keys()) if k != "id"]
+            columns = [_COLUMN_LABELS.get(k, k) for k in keys]
+            rows = [[str(item.get(k, "")) for k in keys] for item in items]
+            return [TableBlock(title="Tareas", columns=columns, rows=rows)]
+
+    if "members" in result:
+        items = result["members"]
+        if isinstance(items, list) and items:
+            keys = [k for k in list(items[0].keys()) if k != "id"]
+            columns = [_COLUMN_LABELS.get(k, k) for k in keys]
+            rows = [[str(item.get(k, "")) for k in keys] for item in items]
+            return [TableBlock(title="Miembros", columns=columns, rows=rows)]
+
+    return []
+
+
 def build_response(
     session_id: str,
     final_state: dict[str, Any],
@@ -186,9 +228,24 @@ def build_response(
 
     merged_actions = actions_triggered or llm_actions
 
-    has_error = final_state.get("has_error", False)
+    # Auto-generate data blocks from tool results when LLM didn't include them
+    if not any(not isinstance(b, TextBlock) for b in blocks):
+        for tool_msg in reversed(messages):
+            if tool_msg.type == "tool" and tool_msg.content:
+                try:
+                    result = json.loads(tool_msg.content)
+                    if "error" in result:
+                        continue
+                    data_blocks = _auto_blocks_from_tool_result(result, tool_msg.name or "")
+                    if data_blocks:
+                        blocks = data_blocks
+                        break
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    continue
+
+    unexpected_error = final_state.get("unexpected_error", False)
     error_val: str | None = None
-    if has_error and not any(
+    if unexpected_error and not any(
         isinstance(b, AlertBlock) and b.severity == "error" for b in blocks
     ):
         error_val = "One or more tool calls returned an error."
@@ -198,6 +255,20 @@ def build_response(
                 message=error_val,
             )
         )
+
+    if not message.strip() and not any(
+        isinstance(b, AlertBlock) and b.severity == "error" for b in blocks
+    ):
+        logger.warning("Empty response after parsing LLM output — session=%s", session_id)
+        message = "No pude generar una respuesta. ¿Podrías reformular tu consulta?"
+        blocks = [
+            AlertBlock(
+                severity="info",
+                message="Intenta ser más específico o reformula tu pregunta.",
+            )
+        ]
+        if not error_val:
+            error_val = "Empty LLM response content"
 
     return AgentResponse(
         session_id=session_id,

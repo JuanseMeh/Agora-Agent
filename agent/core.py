@@ -42,8 +42,11 @@ async def run(
 
     ctx = ToolContext(
         user_id=session["user_id"],
+        session_id=session_id,
         workspace_id=session.get("workspace_id"),
         conversation_id=conversation_id,
+        pending_suggestion_id=session.get("pending_suggestion_id"),
+        pending_assignment_id=session.get("pending_assignment_id"),
     )
 
     messages = await build_initial_state_messages(
@@ -56,6 +59,7 @@ async def run(
         "ctx": ctx,
         "iteration": 0,
         "has_error": False,
+        "unexpected_error": False,
         "approval_pending": False,
         "confirmed": False,
         "actions_triggered": [],

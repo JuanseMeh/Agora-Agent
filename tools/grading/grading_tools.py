@@ -87,6 +87,13 @@ def make_grading_tools(ctx: ToolContext) -> list:
             ctx.pending_suggestion_id = result.suggestion_id
             ctx.pending_assignment_id = assignment_id
 
+            from agent.session import update_session_pending
+            await update_session_pending(
+                session_id=ctx.session_id,
+                pending_suggestion_id=result.suggestion_id,
+                pending_assignment_id=assignment_id,
+            )
+
             logger.info(
                 "Suggestion generated: suggestion_id=%s assignment=%s count=%d",
                 result.suggestion_id, assignment_id, len(result.results),

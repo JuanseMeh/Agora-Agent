@@ -46,7 +46,7 @@ def make_assignment_tools(ctx: ToolContext) -> list:
                 "assignments": [
                     {
                         "id": str(a.id),
-                        "title": a.title,
+                        "title": a.name,
                         "description": a.description,
                         "dueDate": a.dueDate,
                         "maxScore": a.maxScore,
