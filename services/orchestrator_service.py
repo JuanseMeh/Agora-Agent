@@ -179,12 +179,26 @@ async def suggest_assignment(
     )
 
 
-async def approve_suggestion(suggestion_id: str) -> ApproveResult:
+async def approve_suggestion(
+    suggestion_id: str,
+    overrides: list[dict] | None = None,
+) -> ApproveResult:
     stub = get_stub()
 
     request = ai_service_pb2.ApproveSuggestionRequest(suggestion_id=suggestion_id)
+    if overrides:
+        for o in overrides:
+            override = request.overrides.add()
+            override.submission_id = o["submission_id"]
+            override.criterion_id = o["criterion_id"]
+            override.original_score = o["original_score"]
+            override.teacher_score = o["teacher_score"]
+            override.teacher_feedback = o["teacher_feedback"]
 
-    logger.info("ApproveSuggestion: suggestion_id=%s", suggestion_id)
+    logger.info(
+        "ApproveSuggestion: suggestion_id=%s overrides=%s",
+        suggestion_id, len(overrides or []),
+    )
 
     response: ai_service_pb2.ApproveSuggestionResponse = await stub.ApproveSuggestion(request)
 

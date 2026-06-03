@@ -95,8 +95,17 @@ class SuggestGradesRequest(BaseModel):
     include_already_graded: bool = False
 
 
+class OverrideItem(BaseModel):
+    submission_id: int
+    criterion_id: str
+    original_score: float
+    teacher_score: float
+    teacher_feedback: str
+
+
 class ApproveSuggestionRequest(BaseModel):
     suggestion_id: str
+    overrides: list[OverrideItem] = []
 
 
 @router.post("/suggest-grades")
@@ -163,7 +172,17 @@ async def approve_suggestion(
         body.suggestion_id,
     )
 
-    result = await approve_suggestion(body.suggestion_id)
+    overrides = [
+        {
+            "submission_id": o.submission_id,
+            "criterion_id": o.criterion_id,
+            "original_score": o.original_score,
+            "teacher_score": o.teacher_score,
+            "teacher_feedback": o.teacher_feedback,
+        }
+        for o in body.overrides
+    ]
+    result = await approve_suggestion(body.suggestion_id, overrides)
 
     return {
         "suggestion_id": result.suggestion_id,

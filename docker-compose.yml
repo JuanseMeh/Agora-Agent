@@ -25,6 +25,7 @@ services:
       POSTGRES_USER: agent
       POSTGRES_PASSWORD: agent
       POSTGRES_DB: agent
+      PGDATA: /var/lib/postgresql/18/data
     ports:
       - "5436:5432"
     volumes:

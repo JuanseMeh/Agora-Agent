@@ -16,7 +16,7 @@ test:
 	docker compose run --rm agent pytest
 
 migrate:
-	docker compose exec agent uv run -- alembic upgrade head
+	docker compose exec agent alembic upgrade head
 
 
 proto:
