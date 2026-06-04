@@ -74,11 +74,10 @@ def make_assignment_tools(ctx: ToolContext) -> list:
             return {
                 "id": str(a.id),
                 "workspaceId": str(a.workspaceId),
-                "title": a.title,
+                "title": a.name,
                 "description": a.description,
                 "dueDate": a.dueDate,
                 "maxScore": a.maxScore,
-                "createdAt": a.createdAt,
             }
         except ServiceError as e:
             logger.error("get_assignment(%s) failed: %s", assignment_id, e)
