@@ -17,6 +17,9 @@ from schemas.response import (
     AlertBlock,
     CardBlock,
     ChartBlock,
+    GradingBlock,
+    GradingResultItem,
+    CriterionResult,
     StatBlock,
     TableBlock,
     TextBlock,
@@ -242,6 +245,45 @@ def build_response(
                         break
                 except (json.JSONDecodeError, TypeError, ValueError):
                     continue
+
+    # Inject GradingBlock when suggest_grades was triggered
+    if "suggest_grades" in merged_actions:
+        for tool_msg in reversed(messages):
+            if tool_msg.type == "tool" and tool_msg.name == "suggest_grades" and tool_msg.content:
+                try:
+                    tool_result = json.loads(tool_msg.content)
+                    if "suggestion_id" in tool_result and "results" in tool_result:
+                        blocks.append(
+                            GradingBlock(
+                                suggestion_id=tool_result["suggestion_id"],
+                                assignment_id=tool_result.get("assignment_id", ""),
+                                results=[
+                                    GradingResultItem(
+                                        submission_id=r.get("submissionId", r.get("submission_id", "")),
+                                        total_score=r.get("totalScore", r.get("total_score", 0)),
+                                        max_score=r.get("maxScore", r.get("max_score", 0)),
+                                        feedback_summary=r.get("feedbackSummary", r.get("feedback_summary", "")),
+                                        grading_model=r.get("gradingModel", r.get("grading_model", "")),
+                                        evaluated_at=r.get("evaluatedAt", r.get("evaluated_at", "")),
+                                        criteria_results=[
+                                            CriterionResult(
+                                                criterion_id=c.get("criterionId", c.get("criterion_id", "")),
+                                                criterion_name=c.get("criterionName", c.get("criterion_name", "")),
+                                                score=c.get("score", 0),
+                                                max_score=c.get("maxScore", c.get("max_score", 0)),
+                                                feedback=c.get("feedback", ""),
+                                                matched_level=c.get("matchedLevel", c.get("matched_level", "")),
+                                            )
+                                            for c in r.get("criteriaResults", r.get("criteria_results", []))
+                                        ],
+                                    )
+                                    for r in tool_result["results"]
+                                ],
+                            )
+                        )
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    logger.warning("Failed to parse suggest_grades tool result for GradingBlock")
+                break
 
     unexpected_error = final_state.get("unexpected_error", False)
     error_val: str | None = None

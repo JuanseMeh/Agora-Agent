@@ -17,6 +17,7 @@ from langchain_core.tools import tool
 from services.workspace_service import (
     get_assignment_by_id,
     get_assignments_for_workspace,
+    get_workspace_by_id,
 )
 from services.http_client import ServiceError
 from tools.context import ToolContext
@@ -33,7 +34,7 @@ def make_assignment_tools(ctx: ToolContext) -> list:
         Lists all assignments in the current workspace.
         Use this when the teacher refers to an assignment by name or description
         (e.g. 'the midterm', 'homework 3') and you need to resolve it to an assignment ID.
-        Returns assignment IDs, titles, due dates, and max scores.
+        Returns workspace name, and assignment IDs, titles, due dates, and max scores.
         """
         try:
             workspace_id = ctx.workspace_id_required()
@@ -41,8 +42,15 @@ def make_assignment_tools(ctx: ToolContext) -> list:
             return {"error": str(e)}
 
         try:
+            ws = await get_workspace_by_id(workspace_id)
+            workspace_name = ws.name
+        except Exception:
+            workspace_name = f"Workspace {workspace_id}"
+
+        try:
             assignments = await get_assignments_for_workspace(workspace_id)
             return {
+                "workspace_name": workspace_name,
                 "assignments": [
                     {
                         "id": str(a.id),
@@ -74,11 +82,10 @@ def make_assignment_tools(ctx: ToolContext) -> list:
             return {
                 "id": str(a.id),
                 "workspaceId": str(a.workspaceId),
-                "title": a.title,
+                "title": a.name,
                 "description": a.description,
                 "dueDate": a.dueDate,
                 "maxScore": a.maxScore,
-                "createdAt": a.createdAt,
             }
         except ServiceError as e:
             logger.error("get_assignment(%s) failed: %s", assignment_id, e)

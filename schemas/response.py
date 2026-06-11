@@ -58,7 +58,33 @@ class TextBlock(BaseModel):
     content: str = ""
 
 
-AnyBlock = Union[StatBlock, TableBlock, CardBlock, ChartBlock, AlertBlock, TextBlock]
+class CriterionResult(BaseModel):
+    criterion_id: str
+    criterion_name: str
+    score: float
+    max_score: float
+    feedback: str
+    matched_level: str
+
+
+class GradingResultItem(BaseModel):
+    submission_id: str
+    total_score: float
+    max_score: float
+    feedback_summary: str
+    grading_model: str
+    evaluated_at: str
+    criteria_results: list[CriterionResult] = []
+
+
+class GradingBlock(BaseModel):
+    type: Literal["grading_result"] = "grading_result"
+    suggestion_id: str
+    assignment_id: str
+    results: list[GradingResultItem] = []
+
+
+AnyBlock = Union[StatBlock, TableBlock, CardBlock, ChartBlock, AlertBlock, TextBlock, GradingBlock]
 
 
 class AgentResponse(BaseModel):
