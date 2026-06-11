@@ -72,7 +72,6 @@ async def create_session(
     conversation_id = await create_conversation(
         session_id=session_id,
         user_id=user_id,
-        workspace_id=workspace_id,
     )
 
     data: SessionData = {
@@ -160,6 +159,26 @@ async def update_session_pending(
         "Session pending state updated: session=%s suggestion=%s assignment=%s",
         session_id, pending_suggestion_id, pending_assignment_id,
     )
+
+
+async def restore_session(session_id: str, user_id: str, conversation_id: str, workspace_id: str | None = None) -> SessionData:
+    redis: Redis = get_redis()
+    data: SessionData = {
+        "session_id": session_id,
+        "user_id": user_id,
+        "workspace_id": workspace_id,
+        "conversation_id": conversation_id,
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "pending_suggestion_id": None,
+        "pending_assignment_id": None,
+    }
+    await redis.set(
+        _session_key(session_id),
+        json.dumps(data),
+        ex=settings.session_ttl_seconds,
+    )
+    logger.info("Session restored from Postgres: session_id=%s", session_id)
+    return data
 
 
 async def clear_session_pending(session_id: str) -> None:

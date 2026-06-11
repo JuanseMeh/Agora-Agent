@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from agent.core import run
-from agent.session import SessionExpiredError, get_or_create_session
+from agent.session import SessionExpiredError, get_or_create_session, load_session, restore_session
 from api.dependencies import get_session_id, get_user_id
-from db.queries.conversations import append_message
+from db.queries.conversations import append_message, delete_conversation, get_conversation_by_session_id, list_conversations_by_user, load_message_history
 from schemas.response import AgentResponse
 
 logger = logging.getLogger(__name__)
@@ -210,3 +210,76 @@ async def grading_completed(event: GradingCompletedEvent) -> dict:
         event.teacher_id,
     )
     return {"status": "accepted"}
+
+
+@router.get("/chat/conversations")
+async def get_conversations(user_id: str = Depends(get_user_id)) -> dict:
+    conversations = await list_conversations_by_user(user_id)
+    return {
+        "conversations": [
+            {
+                "id": c["id"],
+                "session_id": c["session_id"],
+                "first_message": (c["first_message"] or "")[:100],
+                "last_message": (c["last_message"] or "")[:100],
+                "started_at": c["started_at"].isoformat() if hasattr(c["started_at"], "isoformat") else str(c["started_at"]),
+                "last_active_at": c["last_active_at"].isoformat() if hasattr(c["last_active_at"], "isoformat") else str(c["last_active_at"]),
+            }
+            for c in conversations
+        ],
+    }
+
+
+@router.delete("/chat/conversations")
+async def delete_chat_conversation(
+    session_id: str = Query(...),
+    user_id: str = Depends(get_user_id),
+) -> dict:
+    from db.pool import get_redis
+
+    deleted = await delete_conversation(session_id, user_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    redis = get_redis()
+    await redis.delete(f"session:{session_id}")
+
+    return {"status": "deleted"}
+
+
+@router.get("/chat/history")
+async def get_chat_messages(session_id: str = Query(...)) -> dict:
+    conversation_id: str | None = None
+
+    try:
+        session = await load_session(session_id)
+        conversation_id = session["conversation_id"]
+    except SessionExpiredError:
+        conv = await get_conversation_by_session_id(session_id)
+        if conv is None:
+            raise HTTPException(status_code=404, detail="Session not found or expired.")
+        conversation_id = conv["id"]
+        await restore_session(
+            session_id=session_id,
+            user_id=conv["user_id"],
+            conversation_id=conv["id"],
+            workspace_id=conv.get("workspace_id"),
+        )
+
+    messages = await load_message_history(
+        conversation_id=conversation_id,
+        limit=50,
+    )
+
+    return {
+        "session_id": session_id,
+        "messages": [
+            {
+                "role": m["role"],
+                "content": m["content"],
+                "blocks": m.get("blocks"),
+                "created_at": m["created_at"].isoformat() if hasattr(m["created_at"], "isoformat") else str(m["created_at"]),
+            }
+            for m in messages
+        ],
+    }
