@@ -82,6 +82,7 @@ class SubmissionDTO(BaseModel):
     feedback: str | None = None
     submittedAt: str | None = None
     gradedAt: str | None = None
+    result: dict | None = None
 
 
 class BasicWorkspaceReportDTO(BaseModel):
