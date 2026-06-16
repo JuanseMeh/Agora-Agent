@@ -231,6 +231,24 @@ def build_response(
 
     merged_actions = actions_triggered or llm_actions
 
+    # Validate that LLM-claimed tool calls actually happened
+    # The LLM may fabricate actions_triggered and data blocks without calling any tool.
+    actual_tool_names = {
+        msg.name for msg in messages
+        if msg.type == "tool" and hasattr(msg, "name")
+    }
+    for claimed_tool in (llm_actions or []):
+        if claimed_tool not in actual_tool_names:
+            logger.warning(
+                "LLM claimed tool %r was called but no ToolMessage found. "
+                "Clearing fabricated blocks and message.",
+                claimed_tool,
+            )
+            message = "Ocurrió un error al obtener los datos. Por favor, intentá de nuevo."
+            blocks = [AlertBlock(severity="error", message="No se pudieron obtener los datos reales. Intentá de nuevo.")]
+            merged_actions = [a for a in merged_actions if a != claimed_tool]
+            break
+
     # Auto-generate data blocks from tool results when LLM didn't include them
     if not any(not isinstance(b, TextBlock) for b in blocks):
         for tool_msg in reversed(messages):
@@ -245,6 +263,43 @@ def build_response(
                         break
                 except (json.JSONDecodeError, TypeError, ValueError):
                     continue
+
+    # Correct stat blocks with actual tool result data
+    # The LLM sometimes hallucinates stat values (e.g. "Tareas: 0" when there is 1).
+    # Scan tool results for basic_workspace_report and list_workspace_members,
+    # then fix any matching stat blocks with real values.
+    stat_corrections: dict[str, int | str] = {}
+    for tool_msg in messages:
+        if tool_msg.type == "tool" and tool_msg.content:
+            try:
+                result = json.loads(tool_msg.content)
+                if "totalAssignments" in result:
+                    stat_corrections["Tareas"] = result["totalAssignments"]
+                if "gradedSubmissions" in result:
+                    stat_corrections["Calificadas"] = result["gradedSubmissions"]
+                if "pendingSubmissions" in result:
+                    stat_corrections["Por calificar"] = result["pendingSubmissions"]
+                if "averageScore" in result and result["averageScore"] is not None:
+                    stat_corrections["Promedio"] = result["averageScore"]
+                if "members" in result and isinstance(result["members"], list):
+                    student_count = sum(
+                        1 for m in result["members"]
+                        if m.get("role", "").upper() in ("STUDENT", "ALUMNO")
+                    )
+                    stat_corrections["Estudiantes"] = student_count
+            except (json.JSONDecodeError, TypeError, ValueError):
+                continue
+
+    if stat_corrections:
+        for block in blocks:
+            if isinstance(block, StatBlock):
+                label_key = block.label
+                if label_key in stat_corrections and block.value != stat_corrections[label_key]:
+                    logger.info(
+                        "Correcting stat block %r from %r to %r",
+                        label_key, block.value, stat_corrections[label_key],
+                    )
+                    block.value = stat_corrections[label_key]
 
     # Inject GradingBlock when suggest_grades was triggered
     if "suggest_grades" in merged_actions:

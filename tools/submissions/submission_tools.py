@@ -36,6 +36,7 @@ def _serialize_submission(s) -> dict:
         "feedback": s.feedback,
         "submittedAt": s.submittedAt,
         "gradedAt": s.gradedAt,
+        "result": s.result,
     }
 
 
