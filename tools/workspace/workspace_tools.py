@@ -24,8 +24,6 @@ logger = logging.getLogger(__name__)
 
 
 def make_workspace_tools(ctx: ToolContext) -> list:
-    _ = ctx  # kept for consistency with other factories
-
     @tool
     async def list_workspaces() -> dict:
         """
@@ -35,7 +33,7 @@ def make_workspace_tools(ctx: ToolContext) -> list:
         Returns a list of workspaces with their IDs and names.
         """
         try:
-            workspaces = await get_all_workspaces()
+            workspaces = await get_all_workspaces(user_id=ctx.user_id)
             return {
                 "workspaces": [
                     {"id": str(ws.id), "name": ws.name, "description": ws.description}
@@ -77,4 +75,38 @@ def make_workspace_tools(ctx: ToolContext) -> list:
             logger.exception("get_workspace unexpected error")
             return {"error": f"Unexpected error fetching workspace: {e}"}
 
-    return [list_workspaces, get_workspace]
+    @tool
+    async def select_workspace(workspace_id: str) -> dict:
+        """
+        Selects and activates a workspace for the current session.
+        Call this when the teacher specifies which workspace to work with
+        (e.g. 'use Test', 'work with Calculus 8A', 'go to my Math class').
+        Accepts a workspace ID (numeric string like "1" or UUID) OR a workspace name.
+        Once selected, subsequent tools will operate within this workspace.
+        """
+        try:
+            ws = await get_workspace_by_id(workspace_id)
+        except ServiceError:
+            try:
+                all_ws = await get_all_workspaces(user_id=ctx.user_id)
+            except ServiceError as e2:
+                return {"error": str(e2)}
+            matches = [w for w in all_ws if w.name.lower() == workspace_id.lower()]
+            if not matches:
+                return {"error": f"No se encontró un espacio de trabajo con ID o nombre '{workspace_id}'."}
+            ws = matches[0]
+
+        from agent.session import update_session_workspace
+        await update_session_workspace(ctx.session_id, str(ws.id))
+
+        ctx.workspace_id = str(ws.id)
+
+        logger.info("Workspace selected: session=%s workspace=%s", ctx.session_id, ws.id)
+        return {
+            "success": True,
+            "workspace_id": str(ws.id),
+            "name": ws.name,
+            "description": ws.description,
+        }
+
+    return [list_workspaces, get_workspace, select_workspace]
