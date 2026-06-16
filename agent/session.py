@@ -52,6 +52,8 @@ class SessionData(TypedDict):
     workspace_id: str | None
     conversation_id: str
     started_at: str
+    pending_suggestion_id: str | None
+    pending_assignment_id: str | None
 
 
 def _session_key(session_id: str) -> str:
@@ -70,7 +72,6 @@ async def create_session(
     conversation_id = await create_conversation(
         session_id=session_id,
         user_id=user_id,
-        workspace_id=workspace_id,
     )
 
     data: SessionData = {
@@ -79,6 +80,8 @@ async def create_session(
         "workspace_id": workspace_id,
         "conversation_id": conversation_id,
         "started_at": started_at,
+        "pending_suggestion_id": None,
+        "pending_assignment_id": None,
     }
 
     await redis.set(
@@ -131,6 +134,55 @@ async def update_session_workspace(session_id: str, workspace_id: str) -> None:
         "Session workspace updated: session_id=%s workspace_id=%s",
         session_id, workspace_id,
     )
+
+
+async def update_session_pending(
+    session_id: str,
+    pending_suggestion_id: str | None,
+    pending_assignment_id: str | None,
+) -> None:
+    redis: Redis = get_redis()
+    raw = await redis.get(_session_key(session_id))
+    if raw is None:
+        raise SessionExpiredError(session_id)
+
+    data: SessionData = json.loads(raw)
+    data["pending_suggestion_id"] = pending_suggestion_id
+    data["pending_assignment_id"] = pending_assignment_id
+
+    await redis.set(
+        _session_key(session_id),
+        json.dumps(data),
+        ex=settings.session_ttl_seconds,
+    )
+    logger.debug(
+        "Session pending state updated: session=%s suggestion=%s assignment=%s",
+        session_id, pending_suggestion_id, pending_assignment_id,
+    )
+
+
+async def restore_session(session_id: str, user_id: str, conversation_id: str, workspace_id: str | None = None) -> SessionData:
+    redis: Redis = get_redis()
+    data: SessionData = {
+        "session_id": session_id,
+        "user_id": user_id,
+        "workspace_id": workspace_id,
+        "conversation_id": conversation_id,
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "pending_suggestion_id": None,
+        "pending_assignment_id": None,
+    }
+    await redis.set(
+        _session_key(session_id),
+        json.dumps(data),
+        ex=settings.session_ttl_seconds,
+    )
+    logger.info("Session restored from Postgres: session_id=%s", session_id)
+    return data
+
+
+async def clear_session_pending(session_id: str) -> None:
+    await update_session_pending(session_id, None, None)
 
 
 async def get_or_create_session(

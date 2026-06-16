@@ -21,18 +21,16 @@ logger = logging.getLogger(__name__)
 async def create_conversation(
     session_id: str,
     user_id: str,
-    workspace_id: str | None,
 ) -> str:
     pool = get_pool()
     row = await pool.fetchrow(
         """
-        INSERT INTO conversations (session_id, user_id, workspace_id, started_at, last_active_at)
-        VALUES ($1::uuid, $2::uuid, $3::uuid, NOW(), NOW())
+        INSERT INTO conversations (session_id, user_id, started_at, last_active_at)
+        VALUES ($1::uuid, $2::uuid, NOW(), NOW())
         RETURNING id::text
         """,
         session_id,
         user_id,
-        workspace_id,
     )
     conversation_id: str = row["id"]
     logger.debug("Created conversation: %s", conversation_id)
@@ -58,11 +56,55 @@ async def get_conversation_by_id(conversation_id: str) -> dict[str, Any] | None:
     return dict(row) if row else None
 
 
+async def get_conversation_by_session_id(session_id: str) -> dict[str, Any] | None:
+    pool = get_pool()
+    row = await pool.fetchrow(
+        """
+        SELECT
+            id::text,
+            session_id::text,
+            user_id::text,
+            workspace_id::text,
+            started_at,
+            last_active_at
+        FROM conversations
+        WHERE session_id = $1::uuid
+        ORDER BY started_at DESC
+        LIMIT 1
+        """,
+        session_id,
+    )
+    return dict(row) if row else None
+
+
 async def touch_conversation(conversation_id: str) -> None:
     await get_pool().execute(
         "UPDATE conversations SET last_active_at = NOW() WHERE id = $1::uuid",
         conversation_id,
     )
+
+
+async def list_conversations_by_user(user_id: str, limit: int = 20) -> list[dict[str, Any]]:
+    pool = get_pool()
+    rows = await pool.fetch(
+        """
+        SELECT
+            c.id::text,
+            c.session_id::text,
+            c.user_id::text,
+            c.started_at,
+            c.last_active_at,
+            (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at ASC LIMIT 1) AS first_message,
+            (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message
+        FROM conversations c
+        WHERE c.user_id = $1::uuid
+        ORDER BY c.last_active_at DESC
+        LIMIT $2
+        """,
+        user_id,
+        limit,
+    )
+    return [dict(r) for r in rows]
 
 
 async def append_message(
@@ -95,6 +137,31 @@ async def append_message(
 
     logger.debug("Appended message: %s role=%s conversation=%s", message_id, role, conversation_id)
     return message_id
+
+
+async def delete_conversation(session_id: str, user_id: str) -> bool:
+    pool = get_pool()
+    result = await pool.execute(
+        """
+        WITH deleted AS (
+            DELETE FROM messages
+            WHERE conversation_id = (
+                SELECT id FROM conversations
+                WHERE session_id = $1::uuid AND user_id = $2::uuid
+            )
+        )
+        DELETE FROM conversations
+        WHERE session_id = $1::uuid AND user_id = $2::uuid
+        """,
+        session_id,
+        user_id,
+    )
+    deleted = result != "DELETE 0"
+    if deleted:
+        logger.info("Deleted conversation: session=%s user=%s", session_id, user_id)
+    else:
+        logger.warning("Conversation not found for delete: session=%s user=%s", session_id, user_id)
+    return deleted
 
 
 async def load_message_history(

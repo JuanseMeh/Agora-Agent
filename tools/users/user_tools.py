@@ -77,10 +77,10 @@ def make_user_tools(ctx: ToolContext) -> list:
     @tool
     async def list_workspace_members() -> dict:
         """
-        Lists all members of the current workspace.
+        Lists all members of the current workspace with their names and roles.
         Use this when the teacher asks who is in their class, or when you need
         to resolve a student name to a user ID before fetching their submissions.
-        Returns member user IDs and roles.
+        Returns full name, user ID, and role for each member.
         """
         from services.workspace_service import get_workspace_members
         try:
@@ -96,8 +96,10 @@ def make_user_tools(ctx: ToolContext) -> list:
                 "members": [
                     {
                         "userId": str(m.userId),
+                        "name": m.fullName or f"{m.firstName or ''} {m.lastName or ''}".strip() or str(m.userId),
+                        "firstName": m.firstName,
+                        "lastName": m.lastName,
                         "role": m.role,
-                        "joinedAt": m.joinedAt,
                     }
                     for m in members
                 ],

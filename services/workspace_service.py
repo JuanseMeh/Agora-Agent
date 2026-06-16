@@ -60,17 +60,20 @@ class MemberDTO(BaseModel):
     userId: Any
     workspaceId: Any
     role: str | None = None
-    joinedAt: str | None = None
+    firstName: str | None = None
+    lastName: str | None = None
+    fullName: str | None = None
+    avatarUrl: str | None = None
 
 
 class AssignmentDTO(BaseModel):
     id: Any
     workspaceId: Any
-    title: str
+    name: str
     description: str | None = None
     dueDate: str | None = None
     maxScore: float | None = None
-    createdAt: str | None = None
+    status: str | None = None
 
 
 class SubmissionDTO(BaseModel):
@@ -124,9 +127,12 @@ class WorkspacePerformanceDataDTO(BaseModel):
     students: list[StudentPerformanceDTO] = []
 
 
-async def get_all_workspaces() -> list[WorkspaceDTO]:
+async def get_all_workspaces(user_id: str | None = None) -> list[WorkspaceDTO]:
     client = get_workspace_client()
-    response = await client.get("/workspaces/getAllWorkspaces")
+    headers = {}
+    if user_id:
+        headers["X-User-Id"] = user_id
+    response = await client.get("/workspaces/getAllWorkspaces", headers=headers)
     raise_for_service_error(response, _SVC)
     return [WorkspaceDTO(**item) for item in response.json()]
 

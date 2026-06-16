@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 @dataclass
 class ToolContext:
     user_id: str
+    session_id: str
     conversation_id: str
     workspace_id: str | None = None
 
