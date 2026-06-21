@@ -36,7 +36,12 @@ def make_workspace_tools(ctx: ToolContext) -> list:
             workspaces = await get_all_workspaces(user_id=ctx.user_id)
             return {
                 "workspaces": [
-                    {"id": str(ws.id), "name": ws.name, "description": ws.description}
+                    {
+                        "id": str(ws.id),
+                        "name": ws.name,
+                        "description": ws.description,
+                        "accentColor": ws.accentColor or "#275D79",
+                    }
                     for ws in workspaces
                 ]
             }
@@ -65,6 +70,7 @@ def make_workspace_tools(ctx: ToolContext) -> list:
                 "id": str(ws.id),
                 "name": ws.name,
                 "description": ws.description,
+                "accentColor": ws.accentColor or "#275D79",
                 "ownerId": str(ws.ownerId) if ws.ownerId else None,
                 "createdAt": ws.createdAt,
             }

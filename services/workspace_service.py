@@ -38,7 +38,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from services.http_client import get_workspace_client, raise_for_service_error
 
@@ -53,6 +53,18 @@ class WorkspaceDTO(BaseModel):
     description: str | None = None
     ownerId: Any | None = None
     createdAt: str | None = None
+    accentColor: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _extract_accent_color(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            ws_data = data.get("data")
+            if isinstance(ws_data, dict):
+                color = ws_data.get("accentColor")
+                if color:
+                    data["accentColor"] = color
+        return data
 
 
 class MemberDTO(BaseModel):

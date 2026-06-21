@@ -58,6 +58,7 @@ def make_assignment_tools(ctx: ToolContext) -> list:
                         "description": a.description,
                         "dueDate": a.dueDate,
                         "maxScore": a.maxScore,
+                        "status": a.status,
                     }
                     for a in assignments
                 ]
@@ -86,6 +87,7 @@ def make_assignment_tools(ctx: ToolContext) -> list:
                 "description": a.description,
                 "dueDate": a.dueDate,
                 "maxScore": a.maxScore,
+                "status": a.status,
             }
         except ServiceError as e:
             logger.error("get_assignment(%s) failed: %s", assignment_id, e)
