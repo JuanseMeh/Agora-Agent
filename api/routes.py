@@ -9,7 +9,14 @@ from agent.core import run
 from agent.session import SessionExpiredError, get_or_create_session, load_session, restore_session
 from api.dependencies import get_session_id, get_user_id
 from db.queries.conversations import append_message, delete_conversation, get_conversation_by_session_id, list_conversations_by_user, load_message_history
+from db.queries.class_plans import create_class_plan, list_class_plans_by_user
 from schemas.response import AgentResponse
+from schemas.class_plan import (
+    ClassPlanListItem,
+    GenerateClassRequest,
+    GenerateClassResponse,
+    SaveClassPlanRequest,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -245,6 +252,51 @@ async def delete_chat_conversation(
     await redis.delete(f"session:{session_id}")
 
     return {"status": "deleted"}
+
+
+@router.post("/generate-class", response_model=GenerateClassResponse)
+async def generate_class(
+    body: GenerateClassRequest,
+    user_id: str = Depends(get_user_id),
+) -> GenerateClassResponse:
+    from services.class_generator import generate_class as run_generator
+
+    if not body.prompt.strip():
+        raise HTTPException(status_code=400, detail="Prompt cannot be empty.")
+
+    logger.info("generate_class: user=%s prompt_len=%d", user_id, len(body.prompt))
+
+    try:
+        result = await run_generator(body.prompt)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception:
+        logger.exception("generate_class failed: user=%s", user_id)
+        raise HTTPException(status_code=500, detail="Error generating class plan.")
+
+
+@router.post("/generate-class/save")
+async def save_class_plan(
+    body: SaveClassPlanRequest,
+    user_id: str = Depends(get_user_id),
+) -> dict:
+    plan = await create_class_plan(
+        user_id=user_id,
+        title=body.title,
+        prompt=body.prompt,
+        plan_data=body.plan_data,
+    )
+    return {"plan": plan}
+
+
+@router.get("/generate-class/history")
+async def get_class_plan_history(
+    user_id: str = Depends(get_user_id),
+    limit: int = 50,
+) -> dict:
+    plans = await list_class_plans_by_user(user_id, limit=limit)
+    return {"plans": [ClassPlanListItem(**p).model_dump() for p in plans]}
 
 
 @router.get("/chat/history")
