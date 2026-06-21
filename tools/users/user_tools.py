@@ -41,6 +41,7 @@ def make_user_tools(ctx: ToolContext) -> list:
                 "email": user.email,
                 "role": user.role,
                 "createdAt": user.createdAt,
+                "avatarUrl": user.avatarUrl,
             }
         except ServiceError as e:
             logger.error("get_user(%s) failed: %s", user_id, e)
@@ -66,6 +67,7 @@ def make_user_tools(ctx: ToolContext) -> list:
                 "email": user.email,
                 "role": user.role,
                 "createdAt": user.createdAt,
+                "avatarUrl": user.avatarUrl,
             }
         except ServiceError as e:
             logger.error("get_user_by_email(%s) failed: %s", email, e)
@@ -75,12 +77,16 @@ def make_user_tools(ctx: ToolContext) -> list:
             return {"error": f"Unexpected error fetching user by email {email}: {e}"}
 
     @tool
-    async def list_workspace_members() -> dict:
+    async def list_workspace_members(role: str | None = None) -> dict:
         """
         Lists all members of the current workspace with their names and roles.
         Use this when the teacher asks who is in their class, or when you need
         to resolve a student name to a user ID before fetching their submissions.
         Returns full name, user ID, and role for each member.
+
+        Args:
+            role: Optional role filter. Pass "MEMBER" to get students only,
+                  "ADMIN" to get teachers/owners only. Omit to get everyone.
         """
         from services.workspace_service import get_workspace_members
         try:
@@ -90,9 +96,12 @@ def make_user_tools(ctx: ToolContext) -> list:
 
         try:
             members = await get_workspace_members(workspace_id)
+
+            filtered = [m for m in members if role is None or (m.role or "").upper() == role.upper()]
+
             return {
                 "workspace_id": workspace_id,
-                "count": len(members),
+                "count": len(filtered),
                 "members": [
                     {
                         "userId": str(m.userId),
@@ -100,8 +109,9 @@ def make_user_tools(ctx: ToolContext) -> list:
                         "firstName": m.firstName,
                         "lastName": m.lastName,
                         "role": m.role,
+                        "avatarUrl": m.avatarUrl,
                     }
-                    for m in members
+                    for m in filtered
                 ],
             }
         except ServiceError as e:

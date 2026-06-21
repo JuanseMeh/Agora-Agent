@@ -25,9 +25,20 @@ from services.orchestrator_service import (
     grade_assignment,
     GradingResult,
 )
+from services.workspace_service import get_workspace_members
 from tools.context import ToolContext
 
 logger = logging.getLogger(__name__)
+
+
+async def _get_student_ids(workspace_id: str | int) -> list[str]:
+    """Fetch workspace members and return user IDs of students only."""
+    try:
+        members = await get_workspace_members(workspace_id)
+        return [str(m.userId) for m in members if (m.role or "").upper() == "MEMBER"]
+    except Exception:
+        logger.exception("Failed to fetch student members for workspace %s", workspace_id)
+        return []
 
 
 def _serialize_grading_result(r: GradingResult) -> dict:
@@ -77,11 +88,13 @@ def make_grading_tools(ctx: ToolContext) -> list:
             return {"error": str(e)}
 
         try:
+            user_ids = await _get_student_ids(workspace_id)
             result = await suggest_assignment(
                 workspace_id=workspace_id,
                 assignment_id=assignment_id,
                 requester_user_id=ctx.user_id,
                 include_already_graded=include_already_graded,
+                user_ids=user_ids if user_ids else None,
             )
 
             ctx.pending_suggestion_id = result.suggestion_id
@@ -135,10 +148,12 @@ def make_grading_tools(ctx: ToolContext) -> list:
             return {"error": str(e)}
 
         try:
+            user_ids = await _get_student_ids(workspace_id)
             result = await grade_assignment(
                 workspace_id=workspace_id,
                 assignment_id=assignment_id,
                 include_already_graded=include_already_graded,
+                user_ids=user_ids if user_ids else None,
             )
 
             logger.info(

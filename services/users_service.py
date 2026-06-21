@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from services.http_client import get_users_client, raise_for_service_error
 
@@ -29,6 +29,16 @@ class UserDTO(BaseModel):
     email: str | None = None
     role: str | None = None
     createdAt: str | None = None
+    avatarUrl: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _extract_avatar_url(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            profile = data.get("profile")
+            if isinstance(profile, dict):
+                data["avatarUrl"] = profile.get("avatarUrl")
+        return data
 
 
 class UserExistsDTO(BaseModel):

@@ -171,12 +171,14 @@ _COLUMN_LABELS = {
     "status": "Estado",
 }
 
+_HIDDEN_KEYS = {"id", "avatarUrl", "accentColor"}
+
 
 def _auto_blocks_from_tool_result(result: dict, tool_name: str) -> list[AnyBlock]:
     if "workspaces" in result:
         items = result["workspaces"]
         if isinstance(items, list) and items:
-            keys = [k for k in list(items[0].keys()) if k != "id"]
+            keys = [k for k in list(items[0].keys()) if k not in _HIDDEN_KEYS]
             columns = [_COLUMN_LABELS.get(k, k) for k in keys]
             rows = [[str(item.get(k, "")) for k in keys] for item in items]
             return [TableBlock(title="Espacios de trabajo", columns=columns, rows=rows)]
@@ -184,7 +186,7 @@ def _auto_blocks_from_tool_result(result: dict, tool_name: str) -> list[AnyBlock
     if "assignments" in result:
         items = result["assignments"]
         if isinstance(items, list) and items:
-            keys = [k for k in list(items[0].keys()) if k != "id"]
+            keys = [k for k in list(items[0].keys()) if k not in _HIDDEN_KEYS]
             columns = [_COLUMN_LABELS.get(k, k) for k in keys]
             rows = [[str(item.get(k, "")) for k in keys] for item in items]
             return [TableBlock(title="Tareas", columns=columns, rows=rows)]
@@ -192,7 +194,7 @@ def _auto_blocks_from_tool_result(result: dict, tool_name: str) -> list[AnyBlock
     if "members" in result:
         items = result["members"]
         if isinstance(items, list) and items:
-            keys = [k for k in list(items[0].keys()) if k != "id"]
+            keys = [k for k in list(items[0].keys()) if k not in _HIDDEN_KEYS]
             columns = [_COLUMN_LABELS.get(k, k) for k in keys]
             rows = [[str(item.get(k, "")) for k in keys] for item in items]
             return [TableBlock(title="Miembros", columns=columns, rows=rows)]
