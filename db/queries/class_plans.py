@@ -20,7 +20,7 @@ async def create_class_plan(
         """
         INSERT INTO class_plans (user_id, title, prompt, plan_data, created_at)
         VALUES ($1::uuid, $2, $3, $4::jsonb, NOW())
-        RETURNING id::text, created_at
+        RETURNING id::text, user_id::text, title, prompt, plan_data, created_at
         """,
         user_id,
         title,
@@ -29,7 +29,7 @@ async def create_class_plan(
     )
     plan_id: str = row["id"]
     logger.info("Created class plan: %s user=%s", plan_id, user_id)
-    return _format_plan(row, plan_data)
+    return _format_plan(row, row["plan_data"])
 
 
 async def list_class_plans_by_user(
@@ -68,6 +68,20 @@ async def get_class_plan(
     if row is None:
         return None
     return _format_plan(row, row["plan_data"])
+
+
+async def delete_class_plan(plan_id: str, user_id: str) -> bool:
+    pool = get_pool()
+    row = await pool.fetchrow(
+        """
+        DELETE FROM class_plans
+        WHERE id = $1::uuid AND user_id = $2::uuid
+        RETURNING id
+        """,
+        plan_id,
+        user_id,
+    )
+    return row is not None
 
 
 def _format_plan(row: Any, raw_plan_data: Any) -> dict[str, Any]:

@@ -24,22 +24,34 @@ class Evaluation(BaseModel):
     criteria: str
 
 
+class TopicDetail(BaseModel):
+    name: str
+    explanation: str
+    key_points: list[str]
+    examples: list[str]
+
+
 class PlanData(BaseModel):
     objective: str
     topics: list[str]
-    activities: list[Activity]
-    rubric: list[RubricItem]
-    evaluation: Evaluation
+    activities: list[Activity] = []
+    rubric: list[RubricItem] = []
+    evaluation: Evaluation | None = None
+    topic_details: list[TopicDetail] = []
 
 
 class GenerateClassRequest(BaseModel):
     prompt: str
+    workspace_id: str | None = None
 
 
 class GenerateClassResponse(BaseModel):
     id: str | None = None
+    type: str = "plan"  # "plan" | "chat"
+    session_id: str | None = None
     title: str
-    plan_data: PlanData
+    message: str | None = None
+    plan_data: PlanData | None = None
 
 
 class SaveClassPlanRequest(BaseModel):

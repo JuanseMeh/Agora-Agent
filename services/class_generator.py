@@ -7,40 +7,21 @@ import re
 from config.settings import settings
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
-from schemas.class_plan import GenerateClassResponse, PlanData
+from schemas.class_plan import GenerateClassResponse, PlanData, TopicDetail
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """Eres un asistente docente experto en planificación de clases.
-Genera un plan de clase estructurado en JSON con el siguiente schema:
-{
-  "title": "string (título de la clase)",
-  "plan_data": {
-    "objective": "string (objetivo general de la clase)",
-    "topics": ["string (lista de temas a cubrir)"],
-    "activities": [
-      {
-        "name": "string (nombre de la actividad)",
-        "duration": "string (duración estimada, ej: '15 min')",
-        "description": "string (descripción detallada de la actividad)"
-      }
-    ],
-    "rubric": [
-      {
-        "criterion": "string (criterio de evaluación)",
-        "excellent": "string (descripción nivel excelente)",
-        "good": "string (descripción nivel bueno)",
-        "fair": "string (descripción nivel suficiente)",
-        "poor": "string (descripción nivel insuficiente)"
-      }
-    ],
-    "evaluation": {
-      "method": "string (método de evaluación, ej: 'Sumativa' o 'Formativa')",
-      "criteria": "string (criterios generales de evaluación)"
-    }
-  }
-}
-Responde ÚNICAMENTE con el JSON, sin texto adicional ni markdown."""
+CHAT_SYSTEM_PROMPT = """Respondé SOLO JSON, sin markdown.
+- Si saluda o pregunta algo casual: {"type":"chat","title":"...","message":"..."}
+- Si pide planificar una clase: {"type":"plan","title":"...","plan_data":{
+  "objective":"...",
+  "topics":["t1","t2"],
+  "topic_details":[{"name":"...","explanation":"...","key_points":["..."],"examples":["..."]}],
+  "activities":[{"name":"...","duration":"...","description":"..."}],
+  "rubric":[{"criterion":"...","excellent":"...","good":"...","fair":"...","poor":"..."}],
+  "evaluation":{"method":"...","criteria":"..."}
+}}
+OBLIGATORIO: CADA topic debe tener SU topic_detail. Sin markdown."""
 
 
 def _make_llm() -> ChatOpenAI:
@@ -50,6 +31,8 @@ def _make_llm() -> ChatOpenAI:
         max_tokens=settings.llm_max_tokens,
         api_key=settings.openai_api_key,
         base_url=settings.openai_base_url,
+        timeout=120,
+        max_retries=2,
     )
 
 
@@ -65,7 +48,7 @@ def _extract_json(text: str) -> str:
 async def generate_class(prompt: str) -> GenerateClassResponse:
     llm = _make_llm()
     messages = [
-        SystemMessage(content=SYSTEM_PROMPT),
+        SystemMessage(content=CHAT_SYSTEM_PROMPT),
         HumanMessage(content=prompt),
     ]
 
@@ -76,19 +59,26 @@ async def generate_class(prompt: str) -> GenerateClassResponse:
         json_str = _extract_json(raw)
         data = json.loads(json_str)
     except json.JSONDecodeError:
-        logger.error("LLM returned invalid JSON: %s", raw[:500])
+        logger.error("LLM returned invalid JSON (len=%d): %s", len(raw), raw[:300])
         raise ValueError("No se pudo generar el plan de clase. Intenta de nuevo con más detalles.")
 
-    if "title" not in data or "plan_data" not in data:
-        if "objective" in data and "title" not in data:
-            data = {"title": prompt[:80], "plan_data": data}
-
-    plan_data = data.get("plan_data", data)
+    response_type = data.get("type", "plan")
     title = data.get("title") or prompt[:80]
 
-    validated = PlanData(**plan_data)
+    if response_type == "chat":
+        return GenerateClassResponse(
+            type="chat",
+            title=title,
+            message=data.get("message", title),
+            plan_data=None,
+        )
+
+    plan_raw = data.get("plan_data", data)
+    validated = PlanData(**plan_raw)
 
     return GenerateClassResponse(
+        type="plan",
         title=title,
+        message=None,
         plan_data=validated,
     )
