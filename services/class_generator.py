@@ -24,18 +24,6 @@ CHAT_SYSTEM_PROMPT = """Respondé SOLO JSON, sin markdown.
 OBLIGATORIO: CADA topic debe tener SU topic_detail. Sin markdown."""
 
 
-def _make_llm() -> ChatOpenAI:
-    return ChatOpenAI(
-        model=settings.llm_model,
-        temperature=0.3,
-        max_tokens=settings.llm_max_tokens,
-        api_key=settings.openai_api_key,
-        base_url=settings.openai_base_url,
-        timeout=120,
-        max_retries=2,
-    )
-
-
 def _extract_json(text: str) -> str:
     text = text.strip()
     if text.startswith("```"):
@@ -45,8 +33,34 @@ def _extract_json(text: str) -> str:
     return text
 
 
+FALLBACK_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
+
+
 async def generate_class(prompt: str) -> GenerateClassResponse:
-    llm = _make_llm()
+    models_to_try = [settings.llm_model, FALLBACK_MODEL]
+    last_error = ""
+
+    for attempt, model in enumerate(models_to_try):
+        try:
+            return await _try_generate(prompt, model)
+        except (ValueError, json.JSONDecodeError) as e:
+            last_error = str(e)
+            logger.warning("Attempt %d with %s failed: %s", attempt + 1, model, last_error[:100])
+            continue
+
+    raise ValueError(f"No se pudo generar el plan de clase después de {len(models_to_try)} intentos. {last_error}")
+
+
+async def _try_generate(prompt: str, model: str) -> GenerateClassResponse:
+    llm = ChatOpenAI(
+        model=model,
+        temperature=0.3,
+        max_tokens=settings.llm_max_tokens,
+        api_key=settings.openai_api_key,
+        base_url=settings.openai_base_url,
+        timeout=180,
+        max_retries=1,
+    )
     messages = [
         SystemMessage(content=CHAT_SYSTEM_PROMPT),
         HumanMessage(content=prompt),
@@ -55,12 +69,8 @@ async def generate_class(prompt: str) -> GenerateClassResponse:
     response = await llm.ainvoke(messages)
     raw = response.content.strip()
 
-    try:
-        json_str = _extract_json(raw)
-        data = json.loads(json_str)
-    except json.JSONDecodeError:
-        logger.error("LLM returned invalid JSON (len=%d): %s", len(raw), raw[:300])
-        raise ValueError("No se pudo generar el plan de clase. Intenta de nuevo con más detalles.")
+    json_str = _extract_json(raw)
+    data = json.loads(json_str)
 
     response_type = data.get("type", "plan")
     title = data.get("title") or prompt[:80]
