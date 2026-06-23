@@ -9,7 +9,14 @@ from agent.core import run
 from agent.session import SessionExpiredError, get_or_create_session, load_session, restore_session
 from api.dependencies import get_session_id, get_user_id
 from db.queries.conversations import append_message, delete_conversation, get_conversation_by_session_id, list_conversations_by_user, load_message_history
+from db.queries.class_plans import create_class_plan, delete_class_plan, get_class_plan, list_class_plans_by_user
 from schemas.response import AgentResponse
+from schemas.class_plan import (
+    ClassPlanListItem,
+    GenerateClassRequest,
+    GenerateClassResponse,
+    SaveClassPlanRequest,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -244,6 +251,108 @@ async def delete_chat_conversation(
     redis = get_redis()
     await redis.delete(f"session:{session_id}")
 
+    return {"status": "deleted"}
+
+
+@router.post("/generate-class", response_model=GenerateClassResponse)
+async def generate_class(
+    body: GenerateClassRequest,
+    user_id: str = Depends(get_user_id),
+    session_id: str | None = Depends(get_session_id),
+) -> GenerateClassResponse:
+    from services.class_generator import generate_class as run_generator
+
+    if not body.prompt.strip():
+        raise HTTPException(status_code=400, detail="Prompt cannot be empty.")
+
+    logger.info("generate_class: user=%s prompt_len=%d", user_id, len(body.prompt))
+
+    try:
+        session = await get_or_create_session(
+            session_id=session_id,
+            user_id=user_id,
+            workspace_id=body.workspace_id,
+        )
+    except SessionExpiredError as e:
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "SESSION_EXPIRED", "message": "Session expired.", "session_id": e.session_id},
+        )
+
+    try:
+        await append_message(
+            conversation_id=session["conversation_id"],
+            role="user",
+            content=body.prompt,
+        )
+    except Exception:
+        logger.exception("Failed to persist user message: conversation=%s", session["conversation_id"])
+
+    try:
+        result = await run_generator(body.prompt)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception:
+        logger.exception("generate_class failed: user=%s", user_id)
+        raise HTTPException(status_code=500, detail="Error generating class plan.")
+
+    try:
+        blocks_data = [{"type": "class_plan", "content": result.model_dump(mode="json")}]
+        await append_message(
+            conversation_id=session["conversation_id"],
+            role="assistant",
+            content=result.model_dump_json(),
+            blocks=blocks_data,
+        )
+    except Exception:
+        logger.exception("Failed to persist assistant message: conversation=%s", session["conversation_id"])
+
+    result.session_id = session["session_id"]
+    return result
+
+
+@router.post("/generate-class/save")
+async def save_class_plan(
+    body: SaveClassPlanRequest,
+    user_id: str = Depends(get_user_id),
+) -> dict:
+    plan = await create_class_plan(
+        user_id=user_id,
+        title=body.title,
+        prompt=body.prompt,
+        plan_data=body.plan_data,
+    )
+    return {"plan": plan}
+
+
+@router.get("/generate-class/history")
+async def get_class_plan_history(
+    user_id: str = Depends(get_user_id),
+    limit: int = 50,
+) -> dict:
+    plans = await list_class_plans_by_user(user_id, limit=limit)
+    return {"plans": [ClassPlanListItem(**p).model_dump() for p in plans]}
+
+
+@router.get("/generate-class/{plan_id}")
+async def get_class_plan_by_id(
+    plan_id: str,
+    user_id: str = Depends(get_user_id),
+) -> dict:
+    plan = await get_class_plan(plan_id, user_id)
+    if plan is None:
+        raise HTTPException(status_code=404, detail="Plan not found.")
+    return {"plan": plan}
+
+
+@router.delete("/generate-class/{plan_id}")
+async def delete_class_plan_by_id(
+    plan_id: str,
+    user_id: str = Depends(get_user_id),
+) -> dict:
+    deleted = await delete_class_plan(plan_id, user_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Plan not found.")
     return {"status": "deleted"}
 
 
