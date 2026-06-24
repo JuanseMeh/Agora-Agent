@@ -41,7 +41,7 @@ services:
       - agora-network
 
   agent-redis:
-    image: redis:7.2-alpine
+    image: redis:7-alpine
     container_name: agent-redis
     restart: unless-stopped
     ports:
