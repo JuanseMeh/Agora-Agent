@@ -29,7 +29,7 @@ services:
     ports:
       - "5436:5432"
     volumes:
-      - agent_db_data:/var/lib/postgresql/data
+      - agent_db_data:/var/lib/postgresql
       - ./db/init/001_schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
       - ./db/init/002_class_plans.sql:/docker-entrypoint-initdb.d/002_class_plans.sql:ro
     healthcheck:
