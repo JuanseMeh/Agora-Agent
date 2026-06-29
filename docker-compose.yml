@@ -29,7 +29,7 @@ services:
     ports:
       - "5436:5432"
     volumes:
-      - agent_db_data:/var/lib/postgresql/data
+      - agent_db_data:/var/lib/postgresql
       - ./db/init/001_schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
       - ./db/init/002_class_plans.sql:/docker-entrypoint-initdb.d/002_class_plans.sql:ro
     healthcheck:
@@ -41,7 +41,7 @@ services:
       - agora-network
 
   agent-redis:
-    image: redis:7.2-alpine
+    image: redis:7-alpine
     container_name: agent-redis
     restart: unless-stopped
     ports:
