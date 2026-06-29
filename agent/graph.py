@@ -167,46 +167,53 @@ async def call_llm_node(state: AgentState, llm) -> dict:
 
 async def call_tool_node(state: AgentState, tool_map: dict) -> dict:
     last_message: AIMessage = state["messages"][-1]
-    tool_call = last_message.tool_calls[0]
 
-    tool_name = tool_call["name"]
-    tool_args = tool_call["args"]
-    tool_id = tool_call["id"]
+    tool_messages: list[ToolMessage] = []
+    any_error = False
+    any_unexpected = False
+    triggered = state.get("actions_triggered", [])[:]
 
-    tool = tool_map.get(tool_name)
-    unexpected_error = False
-    has_error = False
+    for tool_call in last_message.tool_calls:
+        tool_name = tool_call["name"]
+        tool_args = tool_call["args"]
+        tool_id = tool_call["id"]
 
-    if tool is None:
-        result = {"error": f"Tool '{tool_name}' not found."}
-        has_error = True
-        unexpected_error = True
-    else:
-        try:
-            raw_result = await tool.ainvoke(tool_args)
-            result = raw_result if isinstance(raw_result, dict) else {"result": raw_result}
-            has_error = "error" in result
-        except Exception as e:
-            logger.exception("Tool %s raised unexpectedly", tool_name)
-            result = {"error": f"Tool {tool_name} failed: {e}"}
+        tool = tool_map.get(tool_name)
+        has_error = False
+        unexpected_error = False
+
+        if tool is None:
+            result = {"error": f"Tool '{tool_name}' not found."}
             has_error = True
             unexpected_error = True
+        else:
+            try:
+                raw_result = await tool.ainvoke(tool_args)
+                result = raw_result if isinstance(raw_result, dict) else {"result": raw_result}
+                has_error = "error" in result
+            except Exception as e:
+                logger.exception("Tool %s raised unexpectedly", tool_name)
+                result = {"error": f"Tool {tool_name} failed: {e}"}
+                has_error = True
+                unexpected_error = True
 
-    if has_error:
-        logger.warning("Tool %s returned error: %s", tool_name, result.get("error"))
+        if has_error:
+            logger.warning("Tool %s returned error: %s", tool_name, result.get("error"))
 
-    tool_message = ToolMessage(
-        content=json.dumps(result),
-        tool_call_id=tool_id,
-        name=tool_name,
-    )
+        tool_messages.append(ToolMessage(
+            content=json.dumps(result),
+            tool_call_id=tool_id,
+            name=tool_name,
+        ))
 
-    triggered = state.get("actions_triggered", []) + [tool_name]
+        any_error = any_error or has_error
+        any_unexpected = any_unexpected or unexpected_error
+        triggered.append(tool_name)
 
     return {
-        "messages": [tool_message],
-        "has_error": has_error,
-        "unexpected_error": unexpected_error,
+        "messages": tool_messages,
+        "has_error": any_error,
+        "unexpected_error": any_unexpected,
         "iteration": state["iteration"] + 1,
         "actions_triggered": triggered,
     }

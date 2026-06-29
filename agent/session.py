@@ -63,6 +63,7 @@ def _session_key(session_id: str) -> str:
 async def create_session(
     user_id: str,
     workspace_id: str | None,
+    conversation_type: str = "chat",
 ) -> SessionData:
     redis: Redis = get_redis()
 
@@ -72,6 +73,7 @@ async def create_session(
     conversation_id = await create_conversation(
         session_id=session_id,
         user_id=user_id,
+        conversation_type=conversation_type,
     )
 
     data: SessionData = {
@@ -91,8 +93,8 @@ async def create_session(
     )
 
     logger.info(
-        "Session created: session_id=%s user_id=%s workspace_id=%s conversation_id=%s",
-        session_id, user_id, workspace_id, conversation_id,
+        "Session created: session_id=%s user_id=%s workspace_id=%s conversation_id=%s type=%s",
+        session_id, user_id, workspace_id, conversation_id, conversation_type,
     )
     return data
 
@@ -189,9 +191,14 @@ async def get_or_create_session(
     session_id: str | None,
     user_id: str,
     workspace_id: str | None,
+    conversation_type: str = "chat",
 ) -> SessionData:
     if session_id is None:
-        return await create_session(user_id=user_id, workspace_id=workspace_id)
+        return await create_session(
+            user_id=user_id,
+            workspace_id=workspace_id,
+            conversation_type=conversation_type,
+        )
 
     session = await load_session(session_id)
     await refresh_session(session_id)

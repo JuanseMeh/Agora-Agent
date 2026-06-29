@@ -6,6 +6,7 @@ CREATE TABLE conversations (
     session_id UUID NOT NULL,
     user_id UUID NOT NULL,
     workspace_id UUID,
+    type VARCHAR(20) NOT NULL DEFAULT 'chat',
     started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_active_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

@@ -21,19 +21,21 @@ logger = logging.getLogger(__name__)
 async def create_conversation(
     session_id: str,
     user_id: str,
+    conversation_type: str = "chat",
 ) -> str:
     pool = get_pool()
     row = await pool.fetchrow(
         """
-        INSERT INTO conversations (session_id, user_id, started_at, last_active_at)
-        VALUES ($1::uuid, $2::uuid, NOW(), NOW())
+        INSERT INTO conversations (session_id, user_id, type, started_at, last_active_at)
+        VALUES ($1::uuid, $2::uuid, $3, NOW(), NOW())
         RETURNING id::text
         """,
         session_id,
         user_id,
+        conversation_type,
     )
     conversation_id: str = row["id"]
-    logger.debug("Created conversation: %s", conversation_id)
+    logger.debug("Created conversation: %s type=%s", conversation_id, conversation_type)
     return conversation_id
 
 
@@ -65,6 +67,7 @@ async def get_conversation_by_session_id(session_id: str) -> dict[str, Any] | No
             session_id::text,
             user_id::text,
             workspace_id::text,
+            type,
             started_at,
             last_active_at
         FROM conversations
@@ -84,26 +87,49 @@ async def touch_conversation(conversation_id: str) -> None:
     )
 
 
-async def list_conversations_by_user(user_id: str, limit: int = 20) -> list[dict[str, Any]]:
+async def list_conversations_by_user(user_id: str, limit: int = 20, conversation_type: str | None = None) -> list[dict[str, Any]]:
     pool = get_pool()
-    rows = await pool.fetch(
-        """
-        SELECT
-            c.id::text,
-            c.session_id::text,
-            c.user_id::text,
-            c.started_at,
-            c.last_active_at,
-            (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at ASC LIMIT 1) AS first_message,
-            (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message
-        FROM conversations c
-        WHERE c.user_id = $1::uuid
-        ORDER BY c.last_active_at DESC
-        LIMIT $2
-        """,
-        user_id,
-        limit,
-    )
+    if conversation_type:
+        rows = await pool.fetch(
+            """
+            SELECT
+                c.id::text,
+                c.session_id::text,
+                c.user_id::text,
+                c.type,
+                c.started_at,
+                c.last_active_at,
+                (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at ASC LIMIT 1) AS first_message,
+                (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message
+            FROM conversations c
+            WHERE c.user_id = $1::uuid AND c.type = $3
+            ORDER BY c.last_active_at DESC
+            LIMIT $2
+            """,
+            user_id,
+            limit,
+            conversation_type,
+        )
+    else:
+        rows = await pool.fetch(
+            """
+            SELECT
+                c.id::text,
+                c.session_id::text,
+                c.user_id::text,
+                c.type,
+                c.started_at,
+                c.last_active_at,
+                (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at ASC LIMIT 1) AS first_message,
+                (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message
+            FROM conversations c
+            WHERE c.user_id = $1::uuid
+            ORDER BY c.last_active_at DESC
+            LIMIT $2
+            """,
+            user_id,
+            limit,
+        )
     return [dict(r) for r in rows]
 
 
