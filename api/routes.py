@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import logging
 
+import json as json_module
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from agent.core import run
@@ -49,6 +52,7 @@ async def chat(
             session_id=session_id,
             user_id=user_id,
             workspace_id=body.workspace_id,
+            conversation_type="chat",
         )
     except SessionExpiredError as e:
         raise HTTPException(
@@ -220,13 +224,17 @@ async def grading_completed(event: GradingCompletedEvent) -> dict:
 
 
 @router.get("/chat/conversations")
-async def get_conversations(user_id: str = Depends(get_user_id)) -> dict:
-    conversations = await list_conversations_by_user(user_id)
+async def get_conversations(
+    user_id: str = Depends(get_user_id),
+    type: str | None = Query(default=None),
+) -> dict:
+    conversations = await list_conversations_by_user(user_id, conversation_type=type)
     return {
         "conversations": [
             {
                 "id": c["id"],
                 "session_id": c["session_id"],
+                "type": c.get("type"),
                 "first_message": (c["first_message"] or "")[:100],
                 "last_message": (c["last_message"] or "")[:100],
                 "started_at": c["started_at"].isoformat() if hasattr(c["started_at"], "isoformat") else str(c["started_at"]),
@@ -272,6 +280,7 @@ async def generate_class(
             session_id=session_id,
             user_id=user_id,
             workspace_id=body.workspace_id,
+            conversation_type="class_generator",
         )
     except SessionExpiredError as e:
         raise HTTPException(
@@ -309,6 +318,78 @@ async def generate_class(
 
     result.session_id = session["session_id"]
     return result
+
+
+@router.post("/generate-class/stream")
+async def generate_class_stream(
+    body: GenerateClassRequest,
+    user_id: str = Depends(get_user_id),
+    session_id: str | None = Depends(get_session_id),
+):
+    from services.class_generator import generate_class_stream as run_generator_stream
+
+    if not body.prompt.strip():
+        raise HTTPException(status_code=400, detail="Prompt cannot be empty.")
+
+    logger.info("generate_class/stream: user=%s prompt_len=%d", user_id, len(body.prompt))
+
+    try:
+        session = await get_or_create_session(
+            session_id=session_id,
+            user_id=user_id,
+            workspace_id=body.workspace_id,
+            conversation_type="class_generator",
+        )
+    except SessionExpiredError as e:
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "SESSION_EXPIRED", "message": "Session expired.", "session_id": e.session_id},
+        )
+
+    try:
+        await append_message(
+            conversation_id=session["conversation_id"],
+            role="user",
+            content=body.prompt,
+        )
+    except Exception:
+        logger.exception("Failed to persist user message: conversation=%s", session["conversation_id"])
+
+    current_session_id = session["session_id"]
+
+    async def event_stream():
+        final_result = None
+        try:
+            async for item in run_generator_stream(body.prompt):
+                if item["type"] == "result":
+                    item["data"]["session_id"] = current_session_id
+                    final_result = item["data"]
+                yield json_module.dumps(item) + "\n"
+        except Exception as e:
+            logger.exception("generate_class/stream failed: user=%s", user_id)
+            yield json_module.dumps({"type": "error", "detail": str(e)}) + "\n"
+            return
+
+        if final_result:
+            try:
+                blocks_data = [{"type": "class_plan", "content": final_result}]
+                await append_message(
+                    conversation_id=session["conversation_id"],
+                    role="assistant",
+                    content=json_module.dumps(final_result),
+                    blocks=blocks_data,
+                )
+            except Exception:
+                logger.exception("Failed to persist assistant message: conversation=%s", session["conversation_id"])
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="application/x-ndjson",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.post("/generate-class/save")

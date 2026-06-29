@@ -93,6 +93,11 @@ def _parse_llm_output(content: str) -> tuple[str, list[AnyBlock], list[str]]:
 
     message = parsed.get("message", "")
     raw_blocks = parsed.get("blocks", [])
+    # Strip tab-delimited raw data only when blocks are also present (redundant)
+    if raw_blocks:
+        message = "\n".join(
+            line for line in message.split("\n") if "\t" not in line
+        ).strip()
     actions = parsed.get("actions_triggered", [])
 
     blocks: list[AnyBlock] = []
